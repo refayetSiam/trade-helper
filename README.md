@@ -34,8 +34,8 @@ A modern, AI-powered trading analysis platform built with Next.js 14, TypeScript
 ### 1. Clone the repository
 
 ```bash
-git clone <your-repo-url>
-cd trading-bot
+git clone https://github.com/refayetSiam/trade-helper.git
+cd trade-helper
 npm install
 ```
 
@@ -66,6 +66,7 @@ cp .env.local.example .env.local
 ```
 
 Update the following variables:
+
 ```
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
@@ -185,6 +186,22 @@ trading-bot/
 
 ## Development
 
+### Available Scripts
+
+```bash
+# Development
+npm run dev          # Start development server
+npm run build        # Build for production
+npm run start        # Start production server
+
+# Code Quality
+npm run lint         # Run ESLint
+npm run lint:fix     # Fix ESLint issues
+npm run format       # Format code with Prettier
+npm run format:check # Check code formatting
+npm run type-check   # Run TypeScript type checking
+```
+
 ### Adding new components
 
 Use Shadcn/ui CLI to add new components:
@@ -193,22 +210,46 @@ Use Shadcn/ui CLI to add new components:
 npx shadcn@latest add [component-name]
 ```
 
-### Code style
+### Code Quality Tools
 
-The project uses:
-- TypeScript for type safety
-- Tailwind CSS for styling
-- Prettier for code formatting
-- ESLint for linting
+- **TypeScript**: Type safety and better development experience
+- **ESLint**: Code linting with Next.js configuration
+- **Prettier**: Automatic code formatting
+- **Husky**: Git hooks for quality checks
+- **Commitlint**: Conventional commit message format
+
+### Git Workflow
+
+1. All commits must follow conventional commit format
+2. Pre-commit hooks run linting and formatting
+3. CI/CD pipeline runs on all pushes and PRs
+4. Code must pass all quality checks before merge
 
 ## Deployment
 
-The application is optimized for deployment on Vercel:
+The application is optimized for deployment on Vercel and includes automated CI/CD:
 
-1. Push your code to GitHub
-2. Import the project in Vercel
-3. Add environment variables
-4. Deploy
+### Automatic Deployment
+
+1. Push to `main` branch triggers production deployment
+2. Pull requests create preview deployments
+3. All deployments include security scanning and code quality checks
+
+### Manual Deployment
+
+1. Connect your GitHub repository to Vercel
+2. Configure the following environment variables in Vercel:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+3. Deploy automatically on push to main
+
+### GitHub Secrets Setup
+
+For CI/CD pipeline, add these secrets to your GitHub repository:
+
+- `VERCEL_TOKEN`: Your Vercel authentication token
+- `VERCEL_ORG_ID`: Your Vercel organization ID
+- `VERCEL_PROJECT_ID`: Your Vercel project ID
 
 ## License
 
