@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -70,7 +70,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
   });
 
   // Validation logic
-  const validateRanges = () => {
+  const validateRanges = useCallback(() => {
     const errors: ValidationErrors = {};
 
     if (
@@ -113,11 +113,11 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
     }
 
     return Object.keys(errors).length === 0;
-  };
+  }, [filters, onValidationErrors]);
 
   useEffect(() => {
     validateRanges();
-  }, [filters]);
+  }, [validateRanges]);
 
   const updateFilter = (key: keyof FilterValues, value: string) => {
     onFiltersChange({

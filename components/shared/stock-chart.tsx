@@ -70,7 +70,7 @@ const StockChart: React.FC<StockChartProps> = ({
   }, []);
 
   // Reset zoom when data changes
-  useMemo(() => {
+  useEffect(() => {
     setZoomDomain(null);
   }, [data]);
 

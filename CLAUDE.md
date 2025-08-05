@@ -1,144 +1,284 @@
-# Trading Bot - Supabase Setup Guide
+# Trading Bot - Software Specifications
 
 ## Project Overview
 
-AI Trading Analysis Platform - A Next.js application for stock trading analysis, portfolio management, and automated trading strategies.
+**AI Trading Analysis Platform** - A Next.js 15.4.4 application built with TypeScript and React 19 for advanced stock trading analysis, algorithmic pattern detection, and automated trading strategies.
 
-## Supabase Setup Steps
+### Architecture
 
-### 1. Create Supabase Project
+- **Frontend**: Next.js 15.4.4 with App Router, TypeScript, Tailwind CSS v4
+- **Authentication**: Supabase Auth with Email/Google OAuth
+- **Database**: Supabase PostgreSQL with Row Level Security
+- **Charts**: Recharts v3.1.0 for technical analysis, Lightweight Charts for advanced visualization
+- **State Management**: Zustand v5.0.6 + React Query v5.83.0
+- **Deployment**: Vercel via git push integration
 
-1. Go to [supabase.com](https://supabase.com) and create account/login
-2. Click "New Project"
-3. Enter project details:
-   - Project name: `trading-bot` (or your preference)
-   - Database password: (save this securely)
-   - Region: Choose closest to you
-4. Wait for project creation (~2 minutes)
+## Core Features
 
-### 2. Get Credentials
+### 1. Trading Algorithms
 
-1. Go to **Settings** → **API**
-2. Copy these values to `.env.local`:
-   ```
-   NEXT_PUBLIC_SUPABASE_URL=https://[your-project-ref].supabase.co
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...[your-anon-key]
-   ```
+#### Swing Trading Signals
 
-### 3. Enable Authentication
+- **Algorithm**: Multi-indicator confluence detection
+- **Timeframe**: 2-3 day holding period
+- **Indicators**: RSI, MACD, Support/Resistance, Volume analysis
+- **Entry Criteria**: RSI oversold recovery + MACD momentum + support zone
+- **Risk Management**: ATR-based stop losses, 2:1 risk/reward targets
 
-1. Go to **Authentication** → **Providers**
-2. Enable **Email** provider
-3. Configure settings:
-   - Enable Email Signups: ON
-   - Enable Email Confirmations: OFF (for development)
+#### Intraday Gap-Up Breakout Strategy
 
-### 4. Database Schema Setup
+- **Algorithm**: 6-step gap detection with momentum confirmation
+- **Criteria**:
+  - Gap ≥0.3% from previous close
+  - Volume ≥1.2x average
+  - RSI between 40-80
+  - Above 20-day SMA
+  - Strong momentum indicators
+- **Implementation**: Relaxed thresholds for daily data compatibility
 
-Create the following tables in **SQL Editor**:
+### 2. Chart Analysis Engine
 
-```sql
--- Users profile extension
-CREATE TABLE profiles (
-  id UUID REFERENCES auth.users(id) PRIMARY KEY,
-  email TEXT UNIQUE NOT NULL,
-  full_name TEXT,
-  subscription_tier TEXT DEFAULT 'free',
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
+#### Pattern Detection (20+ Algorithms)
 
--- Watchlist
-CREATE TABLE watchlist (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-  symbol TEXT NOT NULL,
-  notes TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(user_id, symbol)
-);
+- **Candlestick Patterns**: Bullish/Bearish Engulfing, Doji, Hammer, Shooting Star
+- **Support/Resistance**: Dynamic level detection with strength scoring
+- **Confluence Analysis**: Multiple pattern alignment with probability weighting
+- **Confidence Filtering**: Top 3 highest confidence patterns displayed
 
--- Portfolio holdings
-CREATE TABLE portfolio (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-  symbol TEXT NOT NULL,
-  quantity DECIMAL NOT NULL,
-  average_cost DECIMAL NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
+#### Technical Indicators
 
--- Price alerts
-CREATE TABLE alerts (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-  symbol TEXT NOT NULL,
-  condition TEXT NOT NULL, -- 'above' or 'below'
-  target_price DECIMAL NOT NULL,
-  is_active BOOLEAN DEFAULT true,
-  triggered_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
+- **Trend**: SMA (20/50/200), EMA (12/26), VWAP
+- **Momentum**: RSI, MACD, Stochastic, Williams %R
+- **Volatility**: Bollinger Bands, ATR
+- **Volume**: Volume MA, On-Balance Volume
 
--- Enable Row Level Security (RLS)
-ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE watchlist ENABLE ROW LEVEL SECURITY;
-ALTER TABLE portfolio ENABLE ROW LEVEL SECURITY;
-ALTER TABLE alerts ENABLE ROW LEVEL SECURITY;
+### 3. Options Trading
 
--- RLS Policies
-CREATE POLICY "Users can view own profile" ON profiles
-  FOR SELECT USING (auth.uid() = id);
+#### Black-Scholes Greeks Calculator
 
-CREATE POLICY "Users can update own profile" ON profiles
-  FOR UPDATE USING (auth.uid() = id);
+- **Calculations**: Delta, Gamma, Theta, Vega, Rho
+- **Pricing**: Theoretical option value, intrinsic/time value
+- **Implementation**: Custom Black-Scholes without external dependencies
 
-CREATE POLICY "Users can view own watchlist" ON watchlist
-  FOR ALL USING (auth.uid() = user_id);
+#### Covered Calls Analysis
 
-CREATE POLICY "Users can manage own portfolio" ON portfolio
-  FOR ALL USING (auth.uid() = user_id);
+- **Formulas**:
+  - MaxProfit = (min(K – S, 0) + P) × 100 – InterestCost
+  - AnnualizedReturn = (MaxProfit / (S × 100)) × (365 / T) × 100
+  - BreakEven = S – P
+- **Risk Metrics**: Cost of borrowing, max loss, probability of profit
 
-CREATE POLICY "Users can manage own alerts" ON alerts
-  FOR ALL USING (auth.uid() = user_id);
+### 4. User Interface
 
--- Trigger to create profile on user signup
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS trigger AS $$
-BEGIN
-  INSERT INTO public.profiles (id, email)
-  VALUES (new.id, new.email);
-  RETURN new;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+#### Main Application
 
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+- **Primary Page**: /charts (main trading interface)
+- **Navigation**: Collapsible sidebar with /covered-calls, /watchlist
+- **Removed Pages**: dashboard, settings, screener, portfolio, alerts
+
+#### Chart Features
+
+- **Responsive Design**: Dynamic heights (450px mobile, 550px tablet, 650px desktop)
+- **Interaction**: Ctrl/Cmd+scroll zoom, pattern overlay visualization
+- **Entry/Exit Visualization**: TP/SL/Entry lines with price labels
+- **Floating Legend**: Real-time pattern information display
+
+#### UI/UX Improvements
+
+- **Scroll Behavior**: Chart zoom on Ctrl/Cmd, normal page scroll otherwise
+- **Decimal Formatting**: 1 decimal place for all stock prices
+- **Labeling**: "Algo" terminology instead of "AI"
+- **Pattern Filtering**: Maximum 3 patterns to reduce visual clutter
+
+## Application Structure
+
+### Pages
+
+```
+/charts          - Main trading analysis interface
+/covered-calls   - Options analysis and Greeks calculator
+/watchlist       - Stock watchlist management
+/login          - Authentication (Email/Google)
+/register       - User registration
 ```
 
-### 5. Test Application
+### Key Components
 
-1. Run `npm run dev`
-2. Navigate to http://localhost:3000
-3. Try signing up with email/password
-4. Check Supabase dashboard for new user
+- **StockChart**: Main chart component with pattern overlays
+- **PatternEvidencePanel**: Algorithm explanations and evidence
+- **PatternDefinitions**: Trading pattern education
+- **SidebarNav**: Collapsible navigation with 3 main pages
+- **Header**: Market status, API rate counter, user menu
 
-## Development Commands
+### Database Schema
 
-- Start dev server: `npm run dev`
-- Run tests: `npm test`
-- Lint code: `npm run lint`
-- Type check: `npm run typecheck`
+#### User Management
 
-## Common Issues
+```sql
+profiles (id, email, full_name, subscription_tier, created_at, updated_at)
+```
 
-- **"Unsupported provider" error**: Email authentication not enabled in Supabase
-- **DNS error**: Wrong Supabase URL in `.env.local`
-- **Auth errors**: Check RLS policies and authentication settings
+#### Trading Data
 
-## API Keys Needed
+```sql
+watchlist (id, user_id, symbol, notes, created_at)
+portfolio (id, user_id, symbol, quantity, average_cost, created_at, updated_at)
+alerts (id, user_id, symbol, condition, target_price, is_active, triggered_at, created_at)
+```
 
-- `YAHOO_FINANCE_API_KEY`: For real-time stock data (optional in dev with mock data enabled)
-- `SENDGRID_API_KEY`: For email alerts (optional)
+#### Security
+
+- Row Level Security (RLS) enabled on all tables
+- User-specific data access policies
+- Automatic profile creation on signup
+
+## Data Sources & APIs
+
+### Stock Data
+
+- **Primary**: Polygon.io API (real-time, historical data)
+- **Fallback**: Yahoo Finance API (backup/development)
+- **Rate Limiting**: Built-in request throttling and monitoring
+
+### API Configuration
+
+```
+NEXT_PUBLIC_SUPABASE_URL=https://[project].supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=[anon-key]
+YAHOO_FINANCE_API_KEY=[optional]
+POLYGON_API_KEY=[required-for-production]
+```
+
+### Data Management
+
+- **Manual Triggers**: No automatic API calls, user-initiated only
+- **Caching**: React Query with manual refetch control
+- **Error Handling**: Graceful fallback between data sources
+
+## Development Setup
+
+### Prerequisites
+
+- Node.js 18+
+- Supabase account and project
+- Polygon.io API key (optional: Yahoo Finance)
+
+### Installation
+
+```bash
+npm install
+npm run dev --turbopack
+```
+
+### Development Commands
+
+- **Start**: `npm run dev` (with Turbopack)
+- **Build**: `npm run build`
+- **Lint**: `npm run lint` (auto-fix with `npm run lint:fix`)
+- **Type Check**: `npm run type-check`
+- **Format**: `npm run format` (Prettier)
+
+### Git Hooks (Husky)
+
+- **Pre-commit**: ESLint + Prettier auto-formatting
+- **Commit Linting**: Conventional commit message format
+
+## Technical Implementation
+
+### Chart Rendering
+
+- **Library**: Recharts ComposedChart for main visualization
+- **Performance**: Pattern filtering to prevent overcrowding
+- **Responsiveness**: Dynamic sizing based on viewport
+- **Interaction**: Zoom controls, collapsible panels
+
+### Pattern Detection Engine
+
+- **Service**: `PatternDetectionService` with 20+ algorithms
+- **Real-time Analysis**: Confidence scoring and probability calculation
+- **Visual Overlay**: Automatic entry/exit/TP/SL line generation
+- **Evidence Tracking**: Detailed algorithm explanations
+
+### State Management
+
+- **Global State**: Zustand for UI state (sidebar collapse, chart settings)
+- **Server State**: React Query for API data management
+- **Authentication**: Supabase client-side session management
+
+## Deployment
+
+### Vercel Integration
+
+- **Method**: Git push to GitHub → automatic Vercel deployment
+- **Environment**: Production environment variables configured
+- **Build**: Next.js optimized build with Turbopack
+
+### Performance Optimizations
+
+- **Code Splitting**: Dynamic imports for chart components
+- **Caching**: React Query with strategic cache invalidation
+- **Bundle Size**: Optimized dependencies and tree shaking
+
+## Troubleshooting
+
+### Common Issues
+
+- **Turbopack Errors**: Clear `.next` directory and `node_modules/.cache`
+- **Pattern Not Showing**: Check algorithm thresholds and market hours
+- **API Rate Limits**: Monitor usage with built-in rate counter
+- **Authentication Redirects**: Verify callback URLs and middleware routes
+
+### Debug Tools
+
+- **React Query Devtools**: Enabled in development
+- **Console Logging**: Pattern detection debug output
+- **Error Boundaries**: Graceful error handling for chart components
+
+## Trading Algorithm Specifications
+
+### Pattern Confidence Scoring
+
+- **High Confidence**: >75% probability, multiple confirmations
+- **Medium Confidence**: 50-75% probability, some confirmations
+- **Low Confidence**: <50% probability, weak signals
+
+### Risk Management
+
+- **Stop Loss**: ATR-based calculations (typically 1.5-2x ATR)
+- **Take Profit**: Risk/reward ratios of 2:1 or better
+- **Position Sizing**: Based on account risk tolerance
+
+### Algorithm Performance
+
+- **Backtesting**: Historical win rates and probability calculations
+- **Real-time**: Live pattern detection with confidence intervals
+- **Validation**: Multi-timeframe confirmation requirements
+
+## Security & Compliance
+
+### Data Security
+
+- **Row Level Security**: Database-level access control
+- **API Key Management**: Environment variable isolation
+- **Session Management**: Secure Supabase authentication
+
+### Trading Compliance
+
+- **Educational Purpose**: Platform designed for analysis, not execution
+- **Risk Disclosure**: Clear risk warnings and educational content
+- **Data Accuracy**: Multiple data source validation
+
+## Performance Metrics
+
+### Application Performance
+
+- **Load Time**: <2 seconds initial load
+- **Chart Rendering**: <500ms pattern detection
+- **API Response**: <1 second average response time
+- **Memory Usage**: Optimized React Query cache management
+
+### Trading Performance
+
+- **Pattern Accuracy**: Algorithm-specific win rates displayed
+- **Risk Metrics**: Real-time risk/reward calculations
+- **Execution**: Clear entry/exit signals with price targets

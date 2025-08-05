@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Search, TrendingUp, Download, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -151,6 +151,110 @@ const CoveredCallsPage: React.FC = () => {
     retry: 1, // Reduce retries for faster feedback
   });
 
+  const processOptionsData = useCallback(
+    async (chainData: OptionsChainData) => {
+      try {
+        console.log('🔧 Starting to process options data...');
+        console.log(`📈 Stock price: $${chainData.quote.regularMarketPrice}`);
+        console.log(`📅 Expiration dates: ${chainData.options.length}`);
+
+        const allOptions: CoveredCallData[] = [];
+        const riskFreeRate = greeksCalculatorService.getRiskFreeRate();
+        console.log(`📊 Risk-free rate: ${riskFreeRate * 100}%`);
+
+        for (const expiry of chainData.options) {
+          const expirationDate = new Date(expiry.expirationDate * 1000);
+          const timeToExpiry = greeksCalculatorService.calculateTimeToExpiry(expirationDate);
+
+          for (const call of expiry.calls) {
+            try {
+              // Use bid/ask midpoint for more accurate pricing
+              // If bid/ask not available, fall back to lastPrice
+              let optionPrice = call.lastPrice;
+              if (call.bid && call.ask && call.bid > 0 && call.ask > 0) {
+                optionPrice = (call.bid + call.ask) / 2;
+              }
+
+              // Calculate implied volatility from market price
+              let impliedVol = greeksCalculatorService.calculateImpliedVolatility(
+                optionPrice,
+                chainData.quote.regularMarketPrice,
+                call.strike,
+                timeToExpiry,
+                riskFreeRate,
+                'call'
+              );
+
+              // Additional safety check for IV
+              if (!isFinite(impliedVol) || impliedVol > 5) {
+                impliedVol = 0.3; // Default to 30% if calculation fails
+                console.warn(
+                  `IV calculation produced extreme value for ${call.contractSymbol}, using default 30%`
+                );
+              }
+
+              // Prepare inputs for analysis
+              const inputs: BlackScholesInputs = {
+                stockPrice: chainData.quote.regularMarketPrice,
+                strikePrice: call.strike,
+                timeToExpiry,
+                riskFreeRate,
+                volatility: impliedVol,
+                dividendYield: (chainData.quote.dividendYield || 0) / 100,
+              };
+
+              // Calculate Greeks
+              const greeks = greeksCalculatorService.calculateGreeks(inputs, 'call');
+
+              // Analyze covered call opportunity
+              const analysis = greeksCalculatorService.analyzeCoveredCall(
+                inputs,
+                locRate,
+                optionPrice
+              );
+
+              const optionData: CoveredCallData = {
+                id: call.contractSymbol,
+                symbol: chainData.quote.symbol,
+                contractSymbol: call.contractSymbol,
+                expiry: expirationDate.toLocaleDateString(),
+                strike: call.strike,
+                optionPrice: optionPrice, // Use the bid/ask midpoint we calculated
+                volume: call.volume || 0,
+                openInterest: call.openInterest || 0,
+                impliedVolatility: impliedVol,
+                costOfBorrowing: analysis.costOfBorrowing,
+                netProfit: analysis.netProfit,
+                annualizedReturn: analysis.annualizedReturn,
+                breakeven: analysis.breakeven,
+                daysToExpiry: analysis.daysToExpiry,
+                delta: greeks.delta,
+                theta: greeks.theta,
+                gamma: greeks.gamma,
+                vega: greeks.vega,
+                rho: greeks.rho,
+                maxProfit: analysis.maxProfit,
+                maxLoss: analysis.maxLoss,
+                probabilityOfProfit: analysis.probabilityOfProfit,
+              };
+
+              allOptions.push(optionData);
+            } catch (error) {
+              console.warn(`Error processing option ${call.contractSymbol}:`, error);
+            }
+          }
+        }
+
+        setOptionsData(allOptions);
+        toast.success(`✅ Analyzed ${allOptions.length} covered call opportunities`);
+      } catch (error) {
+        console.error('Error processing options data:', error);
+        toast.error('Failed to analyze options data');
+      }
+    },
+    [locRate]
+  );
+
   // Process options data when chain data is available
   useEffect(() => {
     if (optionsChainData) {
@@ -158,108 +262,7 @@ const CoveredCallsPage: React.FC = () => {
       setStockPrice(optionsChainData.quote.regularMarketPrice);
       processOptionsData(optionsChainData);
     }
-  }, [optionsChainData, locRate]);
-
-  const processOptionsData = async (chainData: OptionsChainData) => {
-    try {
-      console.log('🔧 Starting to process options data...');
-      console.log(`📈 Stock price: $${chainData.quote.regularMarketPrice}`);
-      console.log(`📅 Expiration dates: ${chainData.options.length}`);
-
-      const allOptions: CoveredCallData[] = [];
-      const riskFreeRate = greeksCalculatorService.getRiskFreeRate();
-      console.log(`📊 Risk-free rate: ${riskFreeRate * 100}%`);
-
-      for (const expiry of chainData.options) {
-        const expirationDate = new Date(expiry.expirationDate * 1000);
-        const timeToExpiry = greeksCalculatorService.calculateTimeToExpiry(expirationDate);
-
-        for (const call of expiry.calls) {
-          try {
-            // Use bid/ask midpoint for more accurate pricing
-            // If bid/ask not available, fall back to lastPrice
-            let optionPrice = call.lastPrice;
-            if (call.bid && call.ask && call.bid > 0 && call.ask > 0) {
-              optionPrice = (call.bid + call.ask) / 2;
-            }
-
-            // Calculate implied volatility from market price
-            let impliedVol = greeksCalculatorService.calculateImpliedVolatility(
-              optionPrice,
-              chainData.quote.regularMarketPrice,
-              call.strike,
-              timeToExpiry,
-              riskFreeRate,
-              'call'
-            );
-
-            // Additional safety check for IV
-            if (!isFinite(impliedVol) || impliedVol > 5) {
-              impliedVol = 0.3; // Default to 30% if calculation fails
-              console.warn(
-                `IV calculation produced extreme value for ${call.contractSymbol}, using default 30%`
-              );
-            }
-
-            // Prepare inputs for analysis
-            const inputs: BlackScholesInputs = {
-              stockPrice: chainData.quote.regularMarketPrice,
-              strikePrice: call.strike,
-              timeToExpiry,
-              riskFreeRate,
-              volatility: impliedVol,
-              dividendYield: (chainData.quote.dividendYield || 0) / 100,
-            };
-
-            // Calculate Greeks
-            const greeks = greeksCalculatorService.calculateGreeks(inputs, 'call');
-
-            // Analyze covered call opportunity
-            const analysis = greeksCalculatorService.analyzeCoveredCall(
-              inputs,
-              locRate,
-              optionPrice
-            );
-
-            const optionData: CoveredCallData = {
-              id: call.contractSymbol,
-              symbol: chainData.quote.symbol,
-              contractSymbol: call.contractSymbol,
-              expiry: expirationDate.toLocaleDateString(),
-              strike: call.strike,
-              optionPrice: optionPrice, // Use the bid/ask midpoint we calculated
-              volume: call.volume || 0,
-              openInterest: call.openInterest || 0,
-              impliedVolatility: impliedVol,
-              costOfBorrowing: analysis.costOfBorrowing,
-              netProfit: analysis.netProfit,
-              annualizedReturn: analysis.annualizedReturn,
-              breakeven: analysis.breakeven,
-              daysToExpiry: analysis.daysToExpiry,
-              delta: greeks.delta,
-              theta: greeks.theta,
-              gamma: greeks.gamma,
-              vega: greeks.vega,
-              rho: greeks.rho,
-              maxProfit: analysis.maxProfit,
-              maxLoss: analysis.maxLoss,
-              probabilityOfProfit: analysis.probabilityOfProfit,
-            };
-
-            allOptions.push(optionData);
-          } catch (error) {
-            console.warn(`Error processing option ${call.contractSymbol}:`, error);
-          }
-        }
-      }
-
-      setOptionsData(allOptions);
-      toast.success(`✅ Analyzed ${allOptions.length} covered call opportunities`);
-    } catch (error) {
-      console.error('Error processing options data:', error);
-      toast.error('Failed to analyze options data');
-    }
-  };
+  }, [optionsChainData, processOptionsData]);
 
   const handleAnalyze = () => {
     if (!ticker) {
