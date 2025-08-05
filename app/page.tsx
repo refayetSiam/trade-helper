@@ -7,10 +7,12 @@ import Link from 'next/link';
 
 export default async function Home() {
   const supabase = await createServerClientSupabase();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (user) {
-    redirect('/dashboard');
+    redirect('/charts');
   }
 
   return (
@@ -23,11 +25,11 @@ export default async function Home() {
               <TrendingUp className="h-16 w-16 text-primary" />
             </div>
             <h1 className="text-4xl sm:text-6xl font-bold tracking-tight mb-6">
-              AI Trading Analysis Platform
+              Algo Trading Analysis Platform
             </h1>
             <p className="text-xl text-muted-foreground max-w-3xl mx-auto mb-8">
-              Professional-grade trading tools powered by artificial intelligence. 
-              Screen stocks, analyze patterns, and discover covered call opportunities.
+              Professional-grade trading tools powered by artificial intelligence. Screen stocks,
+              analyze patterns, and discover covered call opportunities.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button asChild size="lg" className="text-lg px-8">
@@ -55,7 +57,7 @@ export default async function Home() {
             <Card className="bg-background">
               <CardContent className="p-6">
                 <BarChart3 className="h-12 w-12 text-primary mb-4" />
-                <h3 className="text-xl font-semibold mb-2">AI-Powered Screening</h3>
+                <h3 className="text-xl font-semibold mb-2">Algo-Powered Screening</h3>
                 <p className="text-muted-foreground">
                   Scan 500+ liquid stocks every 5 minutes with advanced pattern recognition
                 </p>
@@ -107,7 +109,7 @@ export default async function Home() {
                 <TrendingUp className="h-12 w-12 text-primary mb-4" />
                 <h3 className="text-xl font-semibold mb-2">Trade Recommendations</h3>
                 <p className="text-muted-foreground">
-                  AI-generated entry/exit points with confidence scores
+                  Algorithm-generated entry/exit points with confidence scores
                 </p>
               </CardContent>
             </Card>
@@ -120,7 +122,7 @@ export default async function Home() {
         <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl font-bold mb-4">Ready to Start Trading Smarter?</h2>
           <p className="text-lg text-muted-foreground mb-8">
-            Join thousands of traders using AI to make better trading decisions
+            Join thousands of traders using algorithms to make better trading decisions
           </p>
           <Button asChild size="lg" className="text-lg px-8">
             <Link href="/register">Get Started Free</Link>

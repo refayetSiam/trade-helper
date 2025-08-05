@@ -3,18 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import {
-  LayoutDashboard,
-  Search,
-  LineChart,
-  Bell,
-  Briefcase,
-  Settings,
-  LogOut,
-  TrendingUp,
-  ChevronLeft,
-  ChevronRight,
-} from 'lucide-react';
+import { LineChart, LogOut, TrendingUp, ChevronLeft, ChevronRight, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { createClient } from '@/lib/supabase/client';
@@ -23,13 +12,9 @@ import toast from 'react-hot-toast';
 import { useState } from 'react';
 
 const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Screener', href: '/dashboard/screener', icon: Search },
-  { name: 'Charts', href: '/dashboard/charts', icon: LineChart },
-  { name: 'Watchlist', href: '/dashboard/watchlist', icon: TrendingUp },
-  { name: 'Alerts', href: '/dashboard/alerts', icon: Bell },
-  { name: 'Portfolio', href: '/dashboard/portfolio', icon: Briefcase },
-  { name: 'Settings', href: '/dashboard/settings', icon: Settings },
+  { name: 'Covered Calls', href: '/covered-calls', icon: Shield },
+  { name: 'Charts', href: '/charts', icon: LineChart },
+  { name: 'Watchlist', href: '/watchlist', icon: TrendingUp },
 ];
 
 export function SidebarNav() {
@@ -42,30 +27,32 @@ export function SidebarNav() {
       const supabase = createClient();
       await supabase.auth.signOut();
       toast.success('Signed out successfully');
-      router.push('/login');
+      // Use window.location to ensure complete refresh and clear any cached data
+      window.location.href = '/login';
     } catch (error) {
+      console.error('Signout error:', error);
       toast.error('Error signing out');
     }
   };
 
   return (
     <TooltipProvider>
-      <div className={cn(
-        "relative flex flex-col h-full bg-card border-r transition-all duration-300",
-        isCollapsed ? "w-16" : "w-64"
-      )}>
+      <div
+        className={cn(
+          'relative flex flex-col h-full bg-card border-r transition-all duration-300',
+          isCollapsed ? 'w-16' : 'w-64'
+        )}
+      >
         {/* Logo */}
         <div className="flex items-center h-16 px-4 border-b">
           <TrendingUp className="h-8 w-8 text-primary flex-shrink-0" />
-          {!isCollapsed && (
-            <span className="ml-3 text-lg font-semibold">TradingAI</span>
-          )}
+          {!isCollapsed && <span className="ml-3 text-lg font-semibold">TradingAI</span>}
         </div>
 
         {/* Navigation Items */}
         <nav className="flex-1 py-4">
           <ul className="space-y-1 px-2">
-            {navigation.map((item) => {
+            {navigation.map(item => {
               const isActive = pathname === item.href;
               return (
                 <li key={item.name}>
@@ -74,25 +61,17 @@ export function SidebarNav() {
                       <Link
                         href={item.href}
                         className={cn(
-                          "flex items-center px-3 py-2 rounded-md transition-colors",
-                          "hover:bg-accent hover:text-accent-foreground",
-                          isActive
-                            ? "bg-primary text-primary-foreground"
-                            : "text-muted-foreground",
-                          isCollapsed && "justify-center"
+                          'flex items-center px-3 py-2 rounded-md transition-colors',
+                          'hover:bg-accent hover:text-accent-foreground',
+                          isActive ? 'bg-primary text-primary-foreground' : 'text-muted-foreground',
+                          isCollapsed && 'justify-center'
                         )}
                       >
                         <item.icon className="h-5 w-5 flex-shrink-0" />
-                        {!isCollapsed && (
-                          <span className="ml-3">{item.name}</span>
-                        )}
+                        {!isCollapsed && <span className="ml-3">{item.name}</span>}
                       </Link>
                     </TooltipTrigger>
-                    {isCollapsed && (
-                      <TooltipContent side="right">
-                        {item.name}
-                      </TooltipContent>
-                    )}
+                    {isCollapsed && <TooltipContent side="right">{item.name}</TooltipContent>}
                   </Tooltip>
                 </li>
               );
@@ -106,21 +85,14 @@ export function SidebarNav() {
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
-                className={cn(
-                  "w-full justify-start",
-                  isCollapsed && "justify-center"
-                )}
+                className={cn('w-full justify-start', isCollapsed && 'justify-center')}
                 onClick={handleSignOut}
               >
                 <LogOut className="h-5 w-5" />
                 {!isCollapsed && <span className="ml-3">Sign Out</span>}
               </Button>
             </TooltipTrigger>
-            {isCollapsed && (
-              <TooltipContent side="right">
-                Sign Out
-              </TooltipContent>
-            )}
+            {isCollapsed && <TooltipContent side="right">Sign Out</TooltipContent>}
           </Tooltip>
         </div>
 
@@ -131,11 +103,7 @@ export function SidebarNav() {
           className="absolute -right-3 top-20 h-6 w-6 rounded-full border bg-background p-0"
           onClick={() => setIsCollapsed(!isCollapsed)}
         >
-          {isCollapsed ? (
-            <ChevronRight className="h-4 w-4" />
-          ) : (
-            <ChevronLeft className="h-4 w-4" />
-          )}
+          {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
         </Button>
       </div>
     </TooltipProvider>

@@ -5,7 +5,14 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import toast from 'react-hot-toast';
@@ -52,7 +59,7 @@ export default function LoginPage() {
         toast.error(error.message);
       } else {
         toast.success('Logged in successfully');
-        router.push('/dashboard');
+        router.push('/charts');
       }
     } catch (error) {
       toast.error('An unexpected error occurred');
@@ -119,7 +126,7 @@ export default function LoginPage() {
               type="email"
               placeholder="Email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={e => setEmail(e.target.value)}
               required
               disabled={isLoading}
             />
@@ -129,7 +136,7 @@ export default function LoginPage() {
               type="password"
               placeholder="Password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={e => setPassword(e.target.value)}
               required
               disabled={isLoading}
             />

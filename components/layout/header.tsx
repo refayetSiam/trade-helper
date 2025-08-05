@@ -14,16 +14,34 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Bell, Search, User as UserIcon } from 'lucide-react';
+import { Search, User as UserIcon } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
+import ApiRateCounter from '@/components/shared/api-rate-counter';
 
 export function Header() {
   const [user, setUser] = useState<User | null>(null);
   const [marketStatus, setMarketStatus] = useState<'open' | 'closed'>('closed');
+  const router = useRouter();
+
+  const handleSignOut = async () => {
+    try {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+      setUser(null); // Clear user state immediately
+      toast.success('Signed out successfully');
+      // Use window.location to ensure complete refresh and clear any cached data
+      window.location.href = '/login';
+    } catch (error) {
+      console.error('Signout error:', error);
+      toast.error('Error signing out');
+    }
+  };
 
   useEffect(() => {
     const supabase = createClient();
-    
+
     // Get user
     supabase.auth.getUser().then(({ data: { user } }) => {
       setUser(user);
@@ -54,30 +72,18 @@ export function Header() {
 
   return (
     <header className="h-16 border-b bg-card px-6 flex items-center justify-between">
-      {/* Left Section */}
-      <div className="flex items-center flex-1 max-w-xl">
-        <div className="relative w-full">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            type="search"
-            placeholder="Search stocks, symbols..."
-            className="pl-10 w-full"
-          />
-        </div>
-      </div>
+      {/* Left Section - Empty for spacing */}
+      <div className="flex-1"></div>
 
       {/* Right Section */}
       <div className="flex items-center gap-4">
+        {/* API Rate Counter */}
+        <ApiRateCounter showDetails={false} />
+
         {/* Market Status */}
         <Badge variant={marketStatus === 'open' ? 'default' : 'secondary'}>
           Market {marketStatus === 'open' ? 'Open' : 'Closed'}
         </Badge>
-
-        {/* Notifications */}
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-5 w-5" />
-          <span className="absolute top-1 right-1 h-2 w-2 bg-destructive rounded-full" />
-        </Button>
 
         {/* User Menu */}
         <DropdownMenu>
@@ -97,25 +103,15 @@ export function Header() {
                 <p className="text-sm font-medium leading-none">
                   {user?.user_metadata?.full_name || 'User'}
                 </p>
-                <p className="text-xs leading-none text-muted-foreground">
-                  {user?.email}
-                </p>
+                <p className="text-xs leading-none text-muted-foreground">{user?.email}</p>
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              Profile
-            </DropdownMenuItem>
-            <DropdownMenuItem>
-              Billing
-            </DropdownMenuItem>
-            <DropdownMenuItem>
-              Settings
-            </DropdownMenuItem>
+            <DropdownMenuItem>Profile</DropdownMenuItem>
+            <DropdownMenuItem>Billing</DropdownMenuItem>
+            <DropdownMenuItem>Settings</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              Sign out
-            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleSignOut}>Sign out</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
