@@ -277,7 +277,7 @@ const ChartsPage: React.FC = () => {
 
     const csvContent = [
       headers.join(','),
-      ...chartData.map((point, index) => {
+      ...chartData.map((point: ChartDataPoint, index: number) => {
         const row = [
           point.date.toISOString().split('T')[0],
           point.open,

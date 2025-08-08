@@ -108,7 +108,7 @@ class YahooFinanceService {
       // Get the initial options data to retrieve all available expiration dates
       let initialData;
       try {
-        initialData = await yahooFinance.options(symbol);
+        initialData = await yahooFinance.options(symbol, {});
       } catch (error) {
         console.error('Failed to get initial options data:', error);
         throw new Error(

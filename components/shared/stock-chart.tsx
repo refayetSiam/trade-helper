@@ -794,7 +794,6 @@ const StockChart: React.FC<StockChartProps> = ({
                         fontSize: 11,
                         fontWeight: 'bold',
                       }}
-                      title={`${pattern.name}\n${pattern.description || `${pattern.signal.toUpperCase()} signal`}\nConfidence: ${pattern.confidence} (${pattern.probability}%)`}
                       onClick={() => onPatternClick && onPatternClick(pattern)}
                       style={{ cursor: 'pointer' }}
                     />
@@ -1139,7 +1138,6 @@ const StockChart: React.FC<StockChartProps> = ({
                         fontSize: 11,
                         fontWeight: 'bold',
                       }}
-                      title={`${pattern.name}\n${pattern.description || `${pattern.signal.toUpperCase()} signal`}\nConfidence: ${pattern.confidence} (${pattern.probability}%)`}
                       onClick={() => onPatternClick && onPatternClick(pattern)}
                       style={{ cursor: 'pointer' }}
                     />
@@ -1515,7 +1513,6 @@ const StockChart: React.FC<StockChartProps> = ({
                         fontSize: 11,
                         fontWeight: 'bold',
                       }}
-                      title={`${pattern.name}\n${pattern.description || `${pattern.signal.toUpperCase()} signal`}\nConfidence: ${pattern.confidence} (${pattern.probability}%)`}
                       onClick={() => onPatternClick && onPatternClick(pattern)}
                       style={{ cursor: 'pointer' }}
                     />
