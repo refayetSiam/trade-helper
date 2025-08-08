@@ -5,6 +5,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const symbol = searchParams.get('symbol');
   const forceRefresh = searchParams.get('refresh') === 'true';
+  const maxExpirations = searchParams.get('maxExpirations');
 
   if (!symbol) {
     return NextResponse.json(
@@ -17,10 +18,14 @@ export async function GET(request: NextRequest) {
 
   try {
     console.log(
-      `🔍 API: Fetching options chain for ${symbol}${forceRefresh ? ' (force refresh)' : ''}`
+      `🔍 API: Fetching options chain for ${symbol}${forceRefresh ? ' (force refresh)' : ''}${maxExpirations ? ` (max ${maxExpirations} expirations)` : ''}`
     );
 
-    const result = await dataProvider.getOptionsChain(symbol.toUpperCase(), forceRefresh);
+    const result = await dataProvider.getOptionsChain(
+      symbol.toUpperCase(),
+      forceRefresh,
+      maxExpirations ? parseInt(maxExpirations) : undefined
+    );
 
     console.log(`✅ API: Successfully fetched options for ${symbol} from ${result.sourceLabel}`);
     console.log(`📊 API: ${result.options.length} expiration dates found`);

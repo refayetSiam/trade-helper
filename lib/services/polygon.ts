@@ -141,13 +141,13 @@ class PolygonService {
         break;
       case '5D':
         fromDate = new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000);
-        multiplier = 15;
-        timespan = 'minute';
+        multiplier = 1;
+        timespan = 'day';
         break;
       case '1M':
         fromDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
         multiplier = 1;
-        timespan = 'hour';
+        timespan = 'day';
         break;
       case '3M':
         fromDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
@@ -229,7 +229,6 @@ class PolygonService {
         expectedMaxAge = 3; // 5-day range should have data within 3 days
         expectedDataDate = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
         break;
-      case '1M':
       case '3M':
       case '6M':
         expectedMaxAge = 5; // Monthly ranges can be up to 5 days behind
@@ -351,7 +350,6 @@ class PolygonService {
         return 5 * 60 * 1000; // 5 minutes for intraday
       case '5D':
         return 10 * 60 * 1000; // 10 minutes
-      case '1M':
       case '3M':
         return 15 * 60 * 1000; // 15 minutes
       default:

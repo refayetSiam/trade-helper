@@ -107,9 +107,8 @@ export class ChartDataService {
       case '1D':
         return '5m';
       case '5D':
-        return '15m';
+        return '1d';
       case '1M':
-        return '1h';
       case '3M':
       case '6M':
       case 'YTD':

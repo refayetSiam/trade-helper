@@ -42,6 +42,7 @@ import {
 import { DetectedPattern } from '@/lib/services/pattern-detection';
 import DataFreshnessIndicator from '@/components/shared/data-freshness-indicator';
 import PatternLegend from '@/components/shared/pattern-legend';
+import { useTradingStore, useCurrentSymbol, useSetCurrentSymbol } from '@/lib/stores/trading-store';
 import toast from 'react-hot-toast';
 
 interface IndicatorOption {
@@ -133,7 +134,20 @@ const CHART_TYPES: { value: ChartType; label: string; icon: any }[] = [
 
 const ChartsPage: React.FC = () => {
   // State
-  const [symbol, setSymbol] = useState('AAPL');
+  // Use shared store for symbol
+  const currentSymbol = useCurrentSymbol();
+  const setCurrentSymbol = useSetCurrentSymbol();
+  const tradingStore = useTradingStore();
+
+  // Initialize symbol if empty
+  const symbol = currentSymbol || 'AAPL';
+
+  useEffect(() => {
+    if (!currentSymbol) {
+      setCurrentSymbol('AAPL');
+    }
+  }, [currentSymbol, setCurrentSymbol]);
+
   const [timeRange, setTimeRange] = useState<TimeRange>('3M');
   const [chartType, setChartType] = useState<ChartType>('line');
   const [selectedIndicators, setSelectedIndicators] = useState<string[]>(['sma20', 'sma50']);
@@ -152,7 +166,7 @@ const ChartsPage: React.FC = () => {
   const [dataFreshness, setDataFreshness] = useState<DataFreshnessInfo | null>(null);
   const [isRightPanelCollapsed, setIsRightPanelCollapsed] = useState(false);
 
-  // Fetch chart data with freshness info - MANUAL TRIGGER ONLY
+  // Check cache first, then fetch if needed
   const {
     data: chartResult,
     isLoading,
@@ -160,8 +174,25 @@ const ChartsPage: React.FC = () => {
     refetch,
   } = useQuery({
     queryKey: ['chartData', symbol, timeRange],
-    queryFn: () => ChartDataService.fetchChartData(symbol, timeRange),
-    enabled: false, // Disable auto-fetch to prevent excessive API calls
+    queryFn: async () => {
+      // Check if we have cached data first
+      const cachedData = tradingStore.getCacheData('chart', symbol);
+      if (cachedData && tradingStore.isCacheValid('chart', symbol)) {
+        console.log('Using cached chart data for', symbol);
+        return { data: cachedData.data, freshness: null };
+      }
+
+      console.log('Fetching fresh chart data for', symbol);
+      const result = await ChartDataService.fetchChartData(symbol, timeRange);
+
+      // Cache the new data
+      if (result?.data) {
+        tradingStore.setCacheData('chart', symbol, result.data, { timeRange });
+      }
+
+      return result;
+    },
+    enabled: false, // Still manual trigger
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
@@ -186,6 +217,14 @@ const ChartsPage: React.FC = () => {
       }
     }
   }, [chartData, freshness]);
+
+  // Auto-load cached data when symbol changes
+  useEffect(() => {
+    if (symbol && tradingStore.isCacheValid('chart', symbol)) {
+      console.log('Auto-loading cached chart data for', symbol);
+      refetch();
+    }
+  }, [symbol, tradingStore, refetch]);
 
   const handleSearch = () => {
     if (!symbol.trim()) {
@@ -350,7 +389,7 @@ const ChartsPage: React.FC = () => {
                 <Input
                   type="text"
                   value={symbol}
-                  onChange={e => setSymbol(e.target.value.toUpperCase())}
+                  onChange={e => setCurrentSymbol(e.target.value.toUpperCase())}
                   placeholder="Enter symbol (e.g., AAPL)"
                   className="pl-10"
                   onKeyPress={e => e.key === 'Enter' && handleSearch()}

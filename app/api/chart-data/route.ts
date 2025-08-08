@@ -5,7 +5,7 @@ import { TimeRange } from '@/lib/services/chart-data';
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const symbol = searchParams.get('symbol');
-  const range = (searchParams.get('range') || '1M') as TimeRange;
+  const range = (searchParams.get('range') || '3M') as TimeRange;
 
   if (!symbol) {
     return NextResponse.json({ error: 'Symbol is required' }, { status: 400 });

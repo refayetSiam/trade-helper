@@ -19,6 +19,15 @@ import {
   BlackScholesInputs,
 } from '@/lib/services/greeks-calculator';
 import { dataProvider } from '@/lib/services/data-provider';
+import {
+  useTradingStore,
+  useCurrentSymbol,
+  useSetCurrentSymbol,
+  useCoveredCallsFilters,
+  useSetCoveredCallsFilters,
+  useLocRate,
+  useSetLocRate,
+} from '@/lib/stores/trading-store';
 
 interface CoveredCallData extends OptionData {
   id: string;
@@ -60,9 +69,19 @@ const ALGORITHMS: RecommendationAlgorithm[] = [
 ];
 
 const CoveredCallsPage: React.FC = () => {
-  // Basic state
-  const [ticker, setTicker] = useState('');
-  const [locRate, setLocRate] = useState(7.1);
+  // Use shared store
+  const currentSymbol = useCurrentSymbol();
+  const setCurrentSymbol = useSetCurrentSymbol();
+  const tradingStore = useTradingStore();
+  const filters = useCoveredCallsFilters();
+  const setFilters = useSetCoveredCallsFilters();
+  const locRate = useLocRate();
+  const setLocRate = useSetLocRate();
+
+  // Initialize symbol if empty, or use current symbol
+  const ticker = currentSymbol || '';
+
+  // Local UI state
   const [activeTab, setActiveTab] = useState<'all' | 'recommendations'>('all');
   const [selectedAlgorithm, setSelectedAlgorithm] = useState('high_profit');
 
@@ -70,23 +89,6 @@ const CoveredCallsPage: React.FC = () => {
   const [optionsData, setOptionsData] = useState<CoveredCallData[]>([]);
   const [recommendations, setRecommendations] = useState<CoveredCallData[]>([]);
   const [stockPrice, setStockPrice] = useState<number | undefined>();
-
-  // Filter state
-  const [filters, setFilters] = useState<FilterValues>({
-    timeMin: '',
-    timeMax: '',
-    strikeMin: '',
-    strikeMax: '',
-    volumeMin: '',
-    volumeMax: '',
-    oiMin: '',
-    oiMax: '',
-    profitability: 'all',
-    ivMin: '',
-    ivMax: '',
-    returnMin: '',
-    returnMax: '',
-  });
 
   const [validationErrors, setValidationErrors] = useState<ValidationErrors>({});
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: null, direction: 'asc' });
@@ -109,7 +111,15 @@ const CoveredCallsPage: React.FC = () => {
         return null;
       }
 
-      console.log(`📡 Fetching options via API for: ${ticker}`);
+      // Check cache first
+      const cachedData = tradingStore.getCacheData('options', ticker);
+      if (cachedData && tradingStore.isCacheValid('options', ticker, 10 * 60 * 1000)) {
+        // 10 minutes for options
+        console.log('Using cached options data for', ticker);
+        return cachedData.data;
+      }
+
+      console.log(`📡 Fetching fresh options via API for: ${ticker}`);
 
       try {
         const refreshParam = Math.random() > 0.5 ? '&refresh=true' : ''; // Force refresh sometimes
@@ -130,6 +140,12 @@ const CoveredCallsPage: React.FC = () => {
 
         const data = await response.json();
         console.log('✅ Options data received via Polygon API:', data);
+
+        // Cache the new data
+        if (data) {
+          tradingStore.setCacheData('options', ticker, data);
+        }
+
         toast.dismiss(); // Dismiss loading toast
         return data;
       } catch (error) {
@@ -263,6 +279,14 @@ const CoveredCallsPage: React.FC = () => {
       processOptionsData(optionsChainData);
     }
   }, [optionsChainData, processOptionsData]);
+
+  // Auto-load cached options data when ticker changes
+  useEffect(() => {
+    if (ticker && tradingStore.isCacheValid('options', ticker, 10 * 60 * 1000)) {
+      console.log('Auto-loading cached options data for', ticker);
+      refetchChain();
+    }
+  }, [ticker, tradingStore, refetchChain]);
 
   const handleAnalyze = () => {
     if (!ticker) {
@@ -572,7 +596,7 @@ const CoveredCallsPage: React.FC = () => {
                 <Input
                   type="text"
                   value={ticker}
-                  onChange={e => setTicker(e.target.value.toUpperCase())}
+                  onChange={e => setCurrentSymbol(e.target.value.toUpperCase())}
                   placeholder="Enter ticker (e.g., AAPL)"
                   className="pl-10 text-lg font-semibold"
                   onKeyPress={e => e.key === 'Enter' && handleAnalyze()}

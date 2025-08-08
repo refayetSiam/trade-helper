@@ -258,7 +258,7 @@ class DataProviderService {
   }
 
   // Fetch options chain with intelligent source selection
-  async getOptionsChain(symbol: string, forceRefresh = false) {
+  async getOptionsChain(symbol: string, forceRefresh = false, maxExpirations?: number) {
     const primarySource = this.config.primarySource;
     const fallbackSource: DataSource = primarySource === 'source1' ? 'source2' : 'source1';
 
@@ -272,7 +272,7 @@ class DataProviderService {
       let result;
       if (primarySource === 'source1') {
         // Yahoo Finance
-        result = await yahooFinanceService.getOptionsChain(symbol);
+        result = await yahooFinanceService.getOptionsChain(symbol, maxExpirations);
       } else {
         // Polygon
         result = await polygonService.getOptionsChain(symbol, forceRefresh, 'high');
@@ -298,7 +298,7 @@ class DataProviderService {
         let result;
         if (fallbackSource === 'source1') {
           // Yahoo Finance
-          result = await yahooFinanceService.getOptionsChain(symbol);
+          result = await yahooFinanceService.getOptionsChain(symbol, maxExpirations);
         } else {
           // Polygon
           result = await polygonService.getOptionsChain(symbol, forceRefresh, 'high');
@@ -385,11 +385,11 @@ class DataProviderService {
         break;
       case '5D':
         period1 = new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000);
-        interval = '15m';
+        interval = '1d';
         break;
       case '1M':
         period1 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        interval = '1h';
+        interval = '1d';
         break;
       case '3M':
         period1 = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);

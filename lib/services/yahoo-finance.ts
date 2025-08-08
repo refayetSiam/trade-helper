@@ -95,9 +95,9 @@ class YahooFinanceService {
   }
 
   /**
-   * Get options chain - simplified to match Python yfinance approach
+   * Get options chain - fetch all available expiration dates
    */
-  async getOptionsChain(symbol: string, expirationDates?: number[]): Promise<OptionsChainData> {
+  async getOptionsChain(symbol: string, maxExpirations?: number): Promise<OptionsChainData> {
     try {
       console.log(`Fetching options chain for ${symbol}...`);
 
@@ -105,92 +105,115 @@ class YahooFinanceService {
       const quote = await this.getQuote(symbol);
       console.log(`Current price for ${symbol}: $${quote.regularMarketPrice}`);
 
-      // Try to get all available options chains - some tickers have multiple expiries
-      let optionsData;
+      // Get the initial options data to retrieve all available expiration dates
+      let initialData;
       try {
-        // First try without any date restrictions to get all available expiries
-        optionsData = await yahooFinance.options(symbol, {}, { validateResult: false } as any);
+        initialData = await yahooFinance.options(symbol);
       } catch (error) {
-        console.warn('Failed to get full options chain, trying alternative approach:', error);
+        console.error('Failed to get initial options data:', error);
+        throw new Error(
+          `No options data available for ${symbol}. This symbol may not have options trading or may be delisted.`
+        );
+      }
+
+      if (
+        !initialData ||
+        !initialData.expirationDates ||
+        initialData.expirationDates.length === 0
+      ) {
+        throw new Error('No expiration dates found for options');
+      }
+
+      console.log(`Found ${initialData.expirationDates.length} expiration dates`);
+
+      // Fetch options for all expiration dates
+      const allOptions: OptionsExpiry[] = [];
+
+      // Limit expiration dates to avoid too many API calls (default 10, max 20)
+      const limit = Math.min(maxExpirations || 10, 20);
+      const datesToFetch = initialData.expirationDates.slice(0, limit);
+
+      for (const expirationDate of datesToFetch) {
         try {
-          // Fallback to basic call
-          optionsData = await yahooFinance.options(symbol, {});
-        } catch (secondError) {
-          console.error('Both options calls failed:', secondError);
-          throw new Error(
-            `No options data available for ${symbol}. This symbol may not have options trading or may be delisted.`
+          console.log(`Fetching options for ${new Date(expirationDate).toLocaleDateString()}...`);
+
+          const optionsData = await yahooFinance.options(symbol, { date: expirationDate });
+
+          if (optionsData && optionsData.options && optionsData.options.length > 0) {
+            const expiry = optionsData.options[0];
+
+            // Handle expiration date - could be Date object or timestamp
+            let expirationTimestamp: number;
+            if (expiry.expirationDate instanceof Date) {
+              expirationTimestamp = Math.floor(expiry.expirationDate.getTime() / 1000);
+            } else if (typeof expiry.expirationDate === 'number') {
+              expirationTimestamp = expiry.expirationDate;
+            } else {
+              // Try to parse as string
+              expirationTimestamp = Math.floor(new Date(expiry.expirationDate).getTime() / 1000);
+            }
+
+            allOptions.push({
+              expirationDate: expirationTimestamp,
+              hasMiniOptions: expiry.hasMiniOptions || false,
+              calls: (expiry.calls || []).map((call: any) => ({
+                contractSymbol:
+                  call.contractSymbol ||
+                  `${symbol}${new Date(expirationTimestamp * 1000).toISOString().slice(0, 10)}C${call.strike}`,
+                strike: call.strike || 0,
+                currency: call.currency || 'USD',
+                lastPrice: call.lastPrice || 0,
+                change: call.change || 0,
+                percentChange: call.percentChange || 0,
+                volume: call.volume || 0,
+                openInterest: call.openInterest || 0,
+                bid: call.bid || 0,
+                ask: call.ask || 0,
+                contractSize: call.contractSize || 'REGULAR',
+                expiration: expirationTimestamp,
+                impliedVolatility: call.impliedVolatility || 0.2, // Default to 20% if not available
+                inTheMoney: call.strike < quote.regularMarketPrice,
+              })),
+              puts: (expiry.puts || []).map((put: any) => ({
+                contractSymbol:
+                  put.contractSymbol ||
+                  `${symbol}${new Date(expirationTimestamp * 1000).toISOString().slice(0, 10)}P${put.strike}`,
+                strike: put.strike || 0,
+                currency: put.currency || 'USD',
+                lastPrice: put.lastPrice || 0,
+                change: put.change || 0,
+                percentChange: put.percentChange || 0,
+                volume: put.volume || 0,
+                openInterest: put.openInterest || 0,
+                bid: put.bid || 0,
+                ask: put.ask || 0,
+                contractSize: put.contractSize || 'REGULAR',
+                expiration: expirationTimestamp,
+                impliedVolatility: put.impliedVolatility || 0.2, // Default to 20% if not available
+                inTheMoney: put.strike > quote.regularMarketPrice,
+              })),
+            });
+          }
+        } catch (error) {
+          console.warn(
+            `Failed to fetch options for ${new Date(expirationDate).toLocaleDateString()}:`,
+            error
           );
+          // Continue with other dates even if one fails
         }
       }
-      console.log('Options data structure:', optionsData);
 
-      if (!optionsData || !optionsData.options) {
-        throw new Error('No options data returned from Yahoo Finance');
-      }
-
-      // Transform the data to match our interface
-      const transformedOptions: OptionsExpiry[] = optionsData.options.map((expiry: any) => {
-        // Handle expiration date - could be Date object or timestamp
-        let expirationTimestamp: number;
-        if (expiry.expirationDate instanceof Date) {
-          expirationTimestamp = Math.floor(expiry.expirationDate.getTime() / 1000);
-        } else if (typeof expiry.expirationDate === 'number') {
-          expirationTimestamp = expiry.expirationDate;
-        } else {
-          // Try to parse as string
-          expirationTimestamp = Math.floor(new Date(expiry.expirationDate).getTime() / 1000);
-        }
-
-        return {
-          expirationDate: expirationTimestamp,
-          hasMiniOptions: expiry.hasMiniOptions || false,
-          calls: (expiry.calls || []).map((call: any) => ({
-            contractSymbol:
-              call.contractSymbol ||
-              `${symbol}${new Date(expirationTimestamp * 1000).toISOString().slice(0, 10)}C${call.strike}`,
-            strike: call.strike || 0,
-            currency: call.currency || 'USD',
-            lastPrice: call.lastPrice || 0,
-            change: call.change || 0,
-            percentChange: call.percentChange || 0,
-            volume: call.volume || 0,
-            openInterest: call.openInterest || 0,
-            bid: call.bid || 0,
-            ask: call.ask || 0,
-            contractSize: call.contractSize || 'REGULAR',
-            expiration: expirationTimestamp,
-            impliedVolatility: call.impliedVolatility || 0.2, // Default to 20% if not available
-            inTheMoney: call.strike < quote.regularMarketPrice,
-          })),
-          puts: (expiry.puts || []).map((put: any) => ({
-            contractSymbol:
-              put.contractSymbol ||
-              `${symbol}${new Date(expirationTimestamp * 1000).toISOString().slice(0, 10)}P${put.strike}`,
-            strike: put.strike || 0,
-            currency: put.currency || 'USD',
-            lastPrice: put.lastPrice || 0,
-            change: put.change || 0,
-            percentChange: put.percentChange || 0,
-            volume: put.volume || 0,
-            openInterest: put.openInterest || 0,
-            bid: put.bid || 0,
-            ask: put.ask || 0,
-            contractSize: put.contractSize || 'REGULAR',
-            expiration: expirationTimestamp,
-            impliedVolatility: put.impliedVolatility || 0.2, // Default to 20% if not available
-            inTheMoney: put.strike > quote.regularMarketPrice,
-          })),
-        };
-      });
-
-      console.log(`Processed ${transformedOptions.length} expiration dates`);
-      transformedOptions.forEach((expiry, i) => {
-        console.log(`Expiry ${i + 1}: ${expiry.calls.length} calls, ${expiry.puts.length} puts`);
+      console.log(`Processed ${allOptions.length} expiration dates`);
+      allOptions.forEach((expiry, i) => {
+        const expiryDate = new Date(expiry.expirationDate * 1000).toLocaleDateString();
+        console.log(
+          `Expiry ${i + 1} (${expiryDate}): ${expiry.calls.length} calls, ${expiry.puts.length} puts`
+        );
       });
 
       return {
         quote,
-        options: transformedOptions,
+        options: allOptions,
       };
     } catch (error) {
       console.error('Detailed error fetching options chain:', error);
@@ -280,11 +303,11 @@ class YahooFinanceService {
         break;
       case '5D':
         period1 = new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000);
-        interval = '15m';
+        interval = '1d';
         break;
       case '1M':
         period1 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        interval = '1h';
+        interval = '1d';
         break;
       case '3M':
         period1 = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);

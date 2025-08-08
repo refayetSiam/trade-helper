@@ -166,28 +166,38 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
   const handleTimeQuickBtn = (preset: string) => {
     setActiveQuickBtns(prev => ({ ...prev, time: preset }));
 
+    let newMin = '';
+    let newMax = '';
+
     switch (preset) {
       case '30d':
-        updateFilter('timeMin', '0');
-        updateFilter('timeMax', '30');
+        newMin = '0';
+        newMax = '30';
         break;
       case '60d':
-        updateFilter('timeMin', '0');
-        updateFilter('timeMax', '60');
+        newMin = '0';
+        newMax = '60';
         break;
       case '90d':
-        updateFilter('timeMin', '0');
-        updateFilter('timeMax', '90');
+        newMin = '0';
+        newMax = '90';
         break;
       case '120d':
-        updateFilter('timeMin', '0');
-        updateFilter('timeMax', '120');
+        newMin = '0';
+        newMax = '120';
         break;
       case 'all':
-        updateFilter('timeMin', '');
-        updateFilter('timeMax', '');
+        newMin = '';
+        newMax = '';
         break;
     }
+
+    // Batch update both min and max in a single call
+    onFiltersChange({
+      ...filters,
+      timeMin: newMin,
+      timeMax: newMax,
+    });
   };
 
   const handleStrikeQuickBtn = (preset: string) => {
@@ -195,66 +205,96 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
 
     setActiveQuickBtns(prev => ({ ...prev, strike: preset }));
 
+    let newMin = '';
+    let newMax = '';
+
     switch (preset) {
       case 'atm5':
-        updateFilter('strikeMin', (currentPrice - 5).toString());
-        updateFilter('strikeMax', (currentPrice + 5).toString());
+        newMin = (currentPrice - 5).toString();
+        newMax = (currentPrice + 5).toString();
         break;
       case 'atm10':
-        updateFilter('strikeMin', (currentPrice - 10).toString());
-        updateFilter('strikeMax', (currentPrice + 10).toString());
+        newMin = (currentPrice - 10).toString();
+        newMax = (currentPrice + 10).toString();
         break;
       case 'otm':
-        updateFilter('strikeMin', currentPrice.toString());
-        updateFilter('strikeMax', '');
+        newMin = currentPrice.toString();
+        newMax = (currentPrice * 1.2).toString();
         break;
       case 'itm':
-        updateFilter('strikeMin', '');
-        updateFilter('strikeMax', currentPrice.toString());
+        newMin = '0';
+        newMax = currentPrice.toString();
         break;
       case 'all':
-        updateFilter('strikeMin', '');
-        updateFilter('strikeMax', '');
+        newMin = '';
+        newMax = '';
         break;
     }
+
+    // Batch update both min and max in a single call
+    onFiltersChange({
+      ...filters,
+      strikeMin: newMin,
+      strikeMax: newMax,
+    });
   };
 
   const handleVolumeQuickBtn = (preset: string) => {
     setActiveQuickBtns(prev => ({ ...prev, volume: preset }));
 
+    let newMin = '';
+    let newMax = '';
+
     switch (preset) {
       case '100+':
-        updateFilter('volumeMin', '100');
-        updateFilter('volumeMax', '');
+        newMin = '100';
+        newMax = '50000';
         break;
       case '500+':
-        updateFilter('volumeMin', '500');
-        updateFilter('volumeMax', '');
+        newMin = '500';
+        newMax = '100000';
         break;
       case 'all':
-        updateFilter('volumeMin', '');
-        updateFilter('volumeMax', '');
+        newMin = '';
+        newMax = '';
         break;
     }
+
+    // Batch update both min and max in a single call
+    onFiltersChange({
+      ...filters,
+      volumeMin: newMin,
+      volumeMax: newMax,
+    });
   };
 
   const handleOIQuickBtn = (preset: string) => {
     setActiveQuickBtns(prev => ({ ...prev, oi: preset }));
 
+    let newMin = '';
+    let newMax = '';
+
     switch (preset) {
       case '100+':
-        updateFilter('oiMin', '100');
-        updateFilter('oiMax', '');
+        newMin = '100';
+        newMax = '100000';
         break;
       case '1000+':
-        updateFilter('oiMin', '1000');
-        updateFilter('oiMax', '');
+        newMin = '1000';
+        newMax = '500000';
         break;
       case 'all':
-        updateFilter('oiMin', '');
-        updateFilter('oiMax', '');
+        newMin = '';
+        newMax = '';
         break;
     }
+
+    // Batch update both min and max in a single call
+    onFiltersChange({
+      ...filters,
+      oiMin: newMin,
+      oiMax: newMax,
+    });
   };
 
   const QuickButton: React.FC<{
@@ -286,21 +326,33 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
     step?: string;
     min?: string;
     max?: string;
-  }> = ({ placeholder, value, onChange, error = false, step = '0.01', min, max }) => (
-    <Input
-      type="number"
-      placeholder={placeholder}
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      className={cn(
-        'w-20 h-8 text-xs text-center bg-background border-input',
-        error && 'border-destructive bg-destructive/10'
-      )}
-      step={step}
-      min={min}
-      max={max}
-    />
-  );
+  }> = React.memo(({ placeholder, value, onChange, error = false, step = '0.01', min, max }) => {
+    const handleChange = useCallback(
+      (e: React.ChangeEvent<HTMLInputElement>) => {
+        onChange(e.target.value);
+      },
+      [onChange]
+    );
+
+    return (
+      <Input
+        type="number"
+        placeholder={placeholder}
+        value={value}
+        onChange={handleChange}
+        className={cn(
+          'w-28 h-8 text-xs text-center bg-background border-input',
+          error && 'border-destructive bg-destructive/10'
+        )}
+        step={step}
+        min={min}
+        max={max}
+        autoComplete="off"
+      />
+    );
+  });
+
+  RangeInput.displayName = 'RangeInput';
 
   return (
     <div

@@ -59,6 +59,21 @@ const StockChart: React.FC<StockChartProps> = ({
   const [zoomDomain, setZoomDomain] = useState<{ left: number; right: number } | null>(null);
   const [windowWidth, setWindowWidth] = useState(1280); // Default to large screen
 
+  // Support/Resistance line visibility state
+  const [supportResistanceVisible, setSupportResistanceVisible] = useState(true);
+  const [selectedSRLines, setSelectedSRLines] = useState<Set<number>>(new Set());
+
+  // Pattern line visibility state
+  const [patternLinesVisible, setPatternLinesVisible] = useState({
+    entry: true,
+    takeProfit: true,
+    stopLoss: true,
+  });
+  const [selectedPatternLines, setSelectedPatternLines] = useState<Set<string>>(new Set());
+
+  // Pattern legend visibility state
+  const [showPatternLegend, setShowPatternLegend] = useState(true);
+
   // Handle window resize for responsive chart height
   useEffect(() => {
     const handleResize = () => setWindowWidth(window.innerWidth);
@@ -216,6 +231,56 @@ const StockChart: React.FC<StockChartProps> = ({
     };
   }, [data, indicators, patternsEnabled, patternTypes, swingTradingMode, intradayMode]);
 
+  // Toggle functions for support/resistance lines
+  const toggleSupportResistance = () => {
+    setSupportResistanceVisible(!supportResistanceVisible);
+  };
+
+  const toggleSRLine = (index: number) => {
+    const newSelectedLines = new Set(selectedSRLines);
+    if (newSelectedLines.has(index)) {
+      newSelectedLines.delete(index);
+    } else {
+      newSelectedLines.add(index);
+    }
+    setSelectedSRLines(newSelectedLines);
+  };
+
+  const isLineVisible = (index: number) => {
+    if (!supportResistanceVisible) return false;
+    // If no lines are specifically selected, show all lines
+    // If lines are selected, only show the selected ones
+    return selectedSRLines.size === 0 || selectedSRLines.has(index);
+  };
+
+  // Pattern line toggle functions
+  const togglePatternLineType = (lineType: 'entry' | 'takeProfit' | 'stopLoss') => {
+    setPatternLinesVisible(prev => ({
+      ...prev,
+      [lineType]: !prev[lineType],
+    }));
+  };
+
+  const togglePatternLine = (patternId: string, lineType: 'entry' | 'takeProfit' | 'stopLoss') => {
+    const lineKey = `${patternId}-${lineType}`;
+    const newSelectedLines = new Set(selectedPatternLines);
+    if (newSelectedLines.has(lineKey)) {
+      newSelectedLines.delete(lineKey);
+    } else {
+      newSelectedLines.add(lineKey);
+    }
+    setSelectedPatternLines(newSelectedLines);
+  };
+
+  const isPatternLineVisible = (
+    patternId: string,
+    lineType: 'entry' | 'takeProfit' | 'stopLoss'
+  ) => {
+    if (!patternLinesVisible[lineType]) return false;
+    const lineKey = `${patternId}-${lineType}`;
+    return selectedPatternLines.size === 0 || selectedPatternLines.has(lineKey);
+  };
+
   // Prepare chart data with indicators and pattern markers
   const chartData = useMemo(() => {
     return data.map((point, index) => {
@@ -329,83 +394,96 @@ const StockChart: React.FC<StockChartProps> = ({
     if (detectedPatterns.length === 0) return null;
 
     return (
-      <div className="absolute top-2 left-16 bg-background/80 backdrop-blur-sm border border-border rounded-lg p-3 shadow-lg max-w-xs">
-        <h4 className="text-sm font-semibold text-foreground mb-2">Active Patterns</h4>
-        <div className="space-y-2 text-xs">
-          {detectedPatterns.map((pattern, idx) => {
-            const currentPrice = chartData[pattern.endIndex]?.close || 0;
-            const entryPercentChange = ((pattern.entryPrice - currentPrice) / currentPrice) * 100;
-            const tpPercentChange =
-              ((pattern.targetPrice - pattern.entryPrice) / pattern.entryPrice) * 100;
-            const slPercentChange =
-              ((pattern.stopLoss - pattern.entryPrice) / pattern.entryPrice) * 100;
+      <div className="absolute top-2 left-16 bg-background/80 backdrop-blur-sm border border-border rounded-lg shadow-lg max-w-xs">
+        {/* Toggle Button */}
+        <div className="flex items-center justify-between p-2 border-b border-border">
+          <h4 className="text-sm font-semibold text-foreground">Active Patterns</h4>
+          <button
+            onClick={() => setShowPatternLegend(!showPatternLegend)}
+            className="p-1 hover:bg-muted rounded text-xs text-muted-foreground hover:text-foreground transition-colors"
+            title={showPatternLegend ? 'Hide patterns' : 'Show patterns'}
+          >
+            {showPatternLegend ? '−' : '+'}
+          </button>
+        </div>
 
-            return (
-              <div
-                key={idx}
-                className="p-2 bg-muted/30 rounded border-l-2"
-                style={{
-                  borderLeftColor:
-                    pattern.signal === 'bullish'
-                      ? '#10b981'
-                      : pattern.signal === 'bearish'
-                        ? '#ef4444'
-                        : '#3b82f6',
-                }}
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="font-semibold">
-                    {pattern.code || pattern.name.substring(0, 3).toUpperCase()}
-                  </span>
-                  <span
-                    className={`text-xs px-1 py-0.5 rounded ${
+        {showPatternLegend && (
+          <div className="p-3 space-y-2 text-xs">
+            {detectedPatterns.map((pattern, idx) => {
+              const currentPrice = chartData[pattern.endIndex]?.close || 0;
+              const entryPercentChange = ((pattern.entryPrice - currentPrice) / currentPrice) * 100;
+              const tpPercentChange =
+                ((pattern.targetPrice - pattern.entryPrice) / pattern.entryPrice) * 100;
+              const slPercentChange =
+                ((pattern.stopLoss - pattern.entryPrice) / pattern.entryPrice) * 100;
+
+              return (
+                <div
+                  key={idx}
+                  className="p-2 bg-muted/30 rounded border-l-2"
+                  style={{
+                    borderLeftColor:
                       pattern.signal === 'bullish'
-                        ? 'bg-green-100 text-green-800'
+                        ? '#10b981'
                         : pattern.signal === 'bearish'
-                          ? 'bg-red-100 text-red-800'
-                          : 'bg-blue-100 text-blue-800'
-                    }`}
-                  >
-                    {pattern.signal}
-                  </span>
-                </div>
-
-                <div className="space-y-0.5">
-                  <div className="flex justify-between gap-2">
-                    <span className="text-blue-600 font-medium">ENTRY:</span>
-                    <span className="font-mono">${pattern.entryPrice.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between gap-2">
-                    <span className="text-green-600 font-medium">TP:</span>
-                    <span className="font-mono">
-                      ${pattern.targetPrice.toFixed(2)} (+{tpPercentChange.toFixed(1)}%)
+                          ? '#ef4444'
+                          : '#3b82f6',
+                  }}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-semibold">
+                      {pattern.code || pattern.name.substring(0, 3).toUpperCase()}
                     </span>
-                  </div>
-                  <div className="flex justify-between gap-2">
-                    <span className="text-red-600 font-medium">SL:</span>
-                    <span className="font-mono">
-                      ${pattern.stopLoss.toFixed(2)} ({slPercentChange.toFixed(1)}%)
-                    </span>
-                  </div>
-                  <div className="flex justify-between gap-2 pt-1 border-t border-border/50">
-                    <span className="text-muted-foreground">Confidence:</span>
                     <span
-                      className={`font-medium ${
-                        pattern.confidence === 'high'
-                          ? 'text-green-600'
-                          : pattern.confidence === 'medium'
-                            ? 'text-yellow-600'
-                            : 'text-red-600'
+                      className={`text-xs px-1 py-0.5 rounded ${
+                        pattern.signal === 'bullish'
+                          ? 'bg-green-100 text-green-800'
+                          : pattern.signal === 'bearish'
+                            ? 'bg-red-100 text-red-800'
+                            : 'bg-blue-100 text-blue-800'
                       }`}
                     >
-                      {pattern.confidence} ({pattern.probability}%)
+                      {pattern.signal}
                     </span>
                   </div>
+
+                  <div className="space-y-0.5">
+                    <div className="flex justify-between gap-2">
+                      <span className="text-blue-600 font-medium">ENTRY:</span>
+                      <span className="font-mono">${pattern.entryPrice.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span className="text-green-600 font-medium">TP:</span>
+                      <span className="font-mono">
+                        ${pattern.targetPrice.toFixed(2)} (+{tpPercentChange.toFixed(1)}%)
+                      </span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span className="text-red-600 font-medium">SL:</span>
+                      <span className="font-mono">
+                        ${pattern.stopLoss.toFixed(2)} ({slPercentChange.toFixed(1)}%)
+                      </span>
+                    </div>
+                    <div className="flex justify-between gap-2 pt-1 border-t border-border/50">
+                      <span className="text-muted-foreground">Confidence:</span>
+                      <span
+                        className={`font-medium ${
+                          pattern.confidence === 'high'
+                            ? 'text-green-600'
+                            : pattern.confidence === 'medium'
+                              ? 'text-yellow-600'
+                              : 'text-red-600'
+                        }`}
+                      >
+                        {pattern.confidence} ({pattern.probability}%)
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     );
   };
@@ -557,22 +635,25 @@ const StockChart: React.FC<StockChartProps> = ({
 
                 {/* Support and Resistance Lines */}
                 {supportResistanceLevels &&
-                  supportResistanceLevels.map((level, idx) => (
-                    <ReferenceLine
-                      key={`sr-${idx}`}
-                      yAxisId="price"
-                      y={level.price}
-                      stroke={level.type === 'support' ? '#10b981' : '#ef4444'}
-                      strokeDasharray="5 5"
-                      strokeWidth={2}
-                      label={{
-                        value: `${level.type === 'support' ? 'S' : 'R'}${level.strength > 1 ? level.strength : ''}: ${level.price.toFixed(1)}`,
-                        position: 'left',
-                        fill: level.type === 'support' ? '#10b981' : '#ef4444',
-                        fontSize: 12,
-                      }}
-                    />
-                  ))}
+                  supportResistanceLevels
+                    .filter((_, idx) => isLineVisible(idx))
+                    .map((level, idx) => (
+                      <ReferenceLine
+                        key={`sr-${idx}`}
+                        yAxisId="price"
+                        y={level.price}
+                        stroke={level.type === 'support' ? '#10b981' : '#ef4444'}
+                        strokeDasharray="5 5"
+                        strokeWidth={2}
+                        style={{ cursor: 'pointer' }}
+                        label={{
+                          value: `${level.type === 'support' ? 'S' : 'R'}${level.strength > 1 ? level.strength : ''}: ${level.price.toFixed(1)}`,
+                          position: 'left',
+                          fill: level.type === 'support' ? '#10b981' : '#ef4444',
+                          fontSize: 12,
+                        }}
+                      />
+                    ))}
 
                 {/* Swing Trading Entry Zones */}
                 {swingTradingMode &&
@@ -616,57 +697,65 @@ const StockChart: React.FC<StockChartProps> = ({
                   const slPercentChange =
                     ((pattern.stopLoss - pattern.entryPrice) / pattern.entryPrice) * 100;
 
+                  const patternId = `${pattern.code || pattern.name}-${idx}`;
+
                   return (
                     <g key={`trade-lines-${idx}`}>
                       {/* Entry Line */}
-                      <ReferenceLine
-                        yAxisId="price"
-                        y={pattern.entryPrice}
-                        stroke="#3b82f6"
-                        strokeWidth={2}
-                        strokeDasharray="0"
-                        label={{
-                          value: `ENTRY: $${pattern.entryPrice.toFixed(2)}`,
-                          position: 'left',
-                          fill: '#3b82f6',
-                          fontSize: 11,
-                          fontWeight: 'bold',
-                        }}
-                      />
+                      {isPatternLineVisible(patternId, 'entry') && (
+                        <ReferenceLine
+                          yAxisId="price"
+                          y={pattern.entryPrice}
+                          stroke="#3b82f6"
+                          strokeWidth={2}
+                          strokeDasharray="0"
+                          label={{
+                            value: `ENTRY: $${pattern.entryPrice.toFixed(2)}`,
+                            position: 'left',
+                            fill: '#3b82f6',
+                            fontSize: 11,
+                            fontWeight: 'bold',
+                          }}
+                        />
+                      )}
 
                       {/* Take Profit Line */}
-                      <ReferenceLine
-                        yAxisId="price"
-                        y={pattern.targetPrice}
-                        stroke="#10b981"
-                        strokeWidth={2}
-                        strokeDasharray="5 5"
-                        strokeOpacity={0.8}
-                        label={{
-                          value: `TP: $${pattern.targetPrice.toFixed(2)} (+${tpPercentChange.toFixed(1)}%)`,
-                          position: 'right',
-                          fill: '#10b981',
-                          fontSize: 11,
-                          fontWeight: 'bold',
-                        }}
-                      />
+                      {isPatternLineVisible(patternId, 'takeProfit') && (
+                        <ReferenceLine
+                          yAxisId="price"
+                          y={pattern.targetPrice}
+                          stroke="#10b981"
+                          strokeWidth={2}
+                          strokeDasharray="5 5"
+                          strokeOpacity={0.8}
+                          label={{
+                            value: `TP: $${pattern.targetPrice.toFixed(2)} (+${tpPercentChange.toFixed(1)}%)`,
+                            position: 'right',
+                            fill: '#10b981',
+                            fontSize: 11,
+                            fontWeight: 'bold',
+                          }}
+                        />
+                      )}
 
                       {/* Stop Loss Line */}
-                      <ReferenceLine
-                        yAxisId="price"
-                        y={pattern.stopLoss}
-                        stroke="#ef4444"
-                        strokeWidth={2}
-                        strokeDasharray="5 5"
-                        strokeOpacity={0.8}
-                        label={{
-                          value: `SL: $${pattern.stopLoss.toFixed(2)} (${slPercentChange.toFixed(1)}%)`,
-                          position: 'center',
-                          fill: '#ef4444',
-                          fontSize: 11,
-                          fontWeight: 'bold',
-                        }}
-                      />
+                      {isPatternLineVisible(patternId, 'stopLoss') && (
+                        <ReferenceLine
+                          yAxisId="price"
+                          y={pattern.stopLoss}
+                          stroke="#ef4444"
+                          strokeWidth={2}
+                          strokeDasharray="5 5"
+                          strokeOpacity={0.8}
+                          label={{
+                            value: `SL: $${pattern.stopLoss.toFixed(2)} (${slPercentChange.toFixed(1)}%)`,
+                            position: 'center',
+                            fill: '#ef4444',
+                            fontSize: 11,
+                            fontWeight: 'bold',
+                          }}
+                        />
+                      )}
                     </g>
                   );
                 })}
@@ -694,7 +783,7 @@ const StockChart: React.FC<StockChartProps> = ({
                       stroke="#ffffff"
                       strokeWidth={2}
                       label={{
-                        value: `${pattern.code || pattern.name.substring(0, 2).toUpperCase()}`,
+                        value: pattern.code || pattern.name.substring(0, 3).toUpperCase(),
                         position: 'top',
                         fill:
                           pattern.signal === 'bullish'
@@ -702,10 +791,10 @@ const StockChart: React.FC<StockChartProps> = ({
                             : pattern.signal === 'bearish'
                               ? '#ef4444'
                               : '#3b82f6',
-                        fontSize: 10,
+                        fontSize: 11,
                         fontWeight: 'bold',
                       }}
-                      data-tooltip={`${pattern.name}: ${pattern.description || `${pattern.signal} signal with ${pattern.probability}% confidence`}`}
+                      title={`${pattern.name}\n${pattern.description || `${pattern.signal.toUpperCase()} signal`}\nConfidence: ${pattern.confidence} (${pattern.probability}%)`}
                       onClick={() => onPatternClick && onPatternClick(pattern)}
                       style={{ cursor: 'pointer' }}
                     />
@@ -891,22 +980,25 @@ const StockChart: React.FC<StockChartProps> = ({
 
                 {/* Support and Resistance Lines */}
                 {supportResistanceLevels &&
-                  supportResistanceLevels.map((level, idx) => (
-                    <ReferenceLine
-                      key={`sr-${idx}`}
-                      yAxisId="price"
-                      y={level.price}
-                      stroke={level.type === 'support' ? '#10b981' : '#ef4444'}
-                      strokeDasharray="5 5"
-                      strokeWidth={2}
-                      label={{
-                        value: `${level.type === 'support' ? 'S' : 'R'}${level.strength > 1 ? level.strength : ''}: ${level.price.toFixed(1)}`,
-                        position: 'left',
-                        fill: level.type === 'support' ? '#10b981' : '#ef4444',
-                        fontSize: 12,
-                      }}
-                    />
-                  ))}
+                  supportResistanceLevels
+                    .filter((_, idx) => isLineVisible(idx))
+                    .map((level, idx) => (
+                      <ReferenceLine
+                        key={`sr-${idx}`}
+                        yAxisId="price"
+                        y={level.price}
+                        stroke={level.type === 'support' ? '#10b981' : '#ef4444'}
+                        strokeDasharray="5 5"
+                        strokeWidth={2}
+                        style={{ cursor: 'pointer' }}
+                        label={{
+                          value: `${level.type === 'support' ? 'S' : 'R'}${level.strength > 1 ? level.strength : ''}: ${level.price.toFixed(1)}`,
+                          position: 'left',
+                          fill: level.type === 'support' ? '#10b981' : '#ef4444',
+                          fontSize: 12,
+                        }}
+                      />
+                    ))}
 
                 {/* Swing Trading Entry Zones */}
                 {swingTradingMode &&
@@ -950,57 +1042,65 @@ const StockChart: React.FC<StockChartProps> = ({
                   const slPercentChange =
                     ((pattern.stopLoss - pattern.entryPrice) / pattern.entryPrice) * 100;
 
+                  const patternId = `${pattern.code || pattern.name}-${idx}`;
+
                   return (
                     <g key={`trade-lines-${idx}`}>
                       {/* Entry Line */}
-                      <ReferenceLine
-                        yAxisId="price"
-                        y={pattern.entryPrice}
-                        stroke="#3b82f6"
-                        strokeWidth={2}
-                        strokeDasharray="0"
-                        label={{
-                          value: `ENTRY: $${pattern.entryPrice.toFixed(2)}`,
-                          position: 'left',
-                          fill: '#3b82f6',
-                          fontSize: 11,
-                          fontWeight: 'bold',
-                        }}
-                      />
+                      {isPatternLineVisible(patternId, 'entry') && (
+                        <ReferenceLine
+                          yAxisId="price"
+                          y={pattern.entryPrice}
+                          stroke="#3b82f6"
+                          strokeWidth={2}
+                          strokeDasharray="0"
+                          label={{
+                            value: `ENTRY: $${pattern.entryPrice.toFixed(2)}`,
+                            position: 'left',
+                            fill: '#3b82f6',
+                            fontSize: 11,
+                            fontWeight: 'bold',
+                          }}
+                        />
+                      )}
 
                       {/* Take Profit Line */}
-                      <ReferenceLine
-                        yAxisId="price"
-                        y={pattern.targetPrice}
-                        stroke="#10b981"
-                        strokeWidth={2}
-                        strokeDasharray="5 5"
-                        strokeOpacity={0.8}
-                        label={{
-                          value: `TP: $${pattern.targetPrice.toFixed(2)} (+${tpPercentChange.toFixed(1)}%)`,
-                          position: 'right',
-                          fill: '#10b981',
-                          fontSize: 11,
-                          fontWeight: 'bold',
-                        }}
-                      />
+                      {isPatternLineVisible(patternId, 'takeProfit') && (
+                        <ReferenceLine
+                          yAxisId="price"
+                          y={pattern.targetPrice}
+                          stroke="#10b981"
+                          strokeWidth={2}
+                          strokeDasharray="5 5"
+                          strokeOpacity={0.8}
+                          label={{
+                            value: `TP: $${pattern.targetPrice.toFixed(2)} (+${tpPercentChange.toFixed(1)}%)`,
+                            position: 'right',
+                            fill: '#10b981',
+                            fontSize: 11,
+                            fontWeight: 'bold',
+                          }}
+                        />
+                      )}
 
                       {/* Stop Loss Line */}
-                      <ReferenceLine
-                        yAxisId="price"
-                        y={pattern.stopLoss}
-                        stroke="#ef4444"
-                        strokeWidth={2}
-                        strokeDasharray="5 5"
-                        strokeOpacity={0.8}
-                        label={{
-                          value: `SL: $${pattern.stopLoss.toFixed(2)} (${slPercentChange.toFixed(1)}%)`,
-                          position: 'center',
-                          fill: '#ef4444',
-                          fontSize: 11,
-                          fontWeight: 'bold',
-                        }}
-                      />
+                      {isPatternLineVisible(patternId, 'stopLoss') && (
+                        <ReferenceLine
+                          yAxisId="price"
+                          y={pattern.stopLoss}
+                          stroke="#ef4444"
+                          strokeWidth={2}
+                          strokeDasharray="5 5"
+                          strokeOpacity={0.8}
+                          label={{
+                            value: `SL: $${pattern.stopLoss.toFixed(2)} (${slPercentChange.toFixed(1)}%)`,
+                            position: 'center',
+                            fill: '#ef4444',
+                            fontSize: 11,
+                            fontWeight: 'bold',
+                          }}
+                        />
+                      )}
                     </g>
                   );
                 })}
@@ -1028,7 +1128,7 @@ const StockChart: React.FC<StockChartProps> = ({
                       stroke="#ffffff"
                       strokeWidth={2}
                       label={{
-                        value: `${pattern.code || pattern.name.substring(0, 2).toUpperCase()}`,
+                        value: pattern.code || pattern.name.substring(0, 3).toUpperCase(),
                         position: 'top',
                         fill:
                           pattern.signal === 'bullish'
@@ -1036,10 +1136,10 @@ const StockChart: React.FC<StockChartProps> = ({
                             : pattern.signal === 'bearish'
                               ? '#ef4444'
                               : '#3b82f6',
-                        fontSize: 10,
+                        fontSize: 11,
                         fontWeight: 'bold',
                       }}
-                      data-tooltip={`${pattern.name}: ${pattern.description || `${pattern.signal} signal with ${pattern.probability}% confidence`}`}
+                      title={`${pattern.name}\n${pattern.description || `${pattern.signal.toUpperCase()} signal`}\nConfidence: ${pattern.confidence} (${pattern.probability}%)`}
                       onClick={() => onPatternClick && onPatternClick(pattern)}
                       style={{ cursor: 'pointer' }}
                     />
@@ -1256,22 +1356,25 @@ const StockChart: React.FC<StockChartProps> = ({
 
                 {/* Support and Resistance Lines */}
                 {supportResistanceLevels &&
-                  supportResistanceLevels.map((level, idx) => (
-                    <ReferenceLine
-                      key={`sr-${idx}`}
-                      yAxisId="price"
-                      y={level.price}
-                      stroke={level.type === 'support' ? '#10b981' : '#ef4444'}
-                      strokeDasharray="5 5"
-                      strokeWidth={2}
-                      label={{
-                        value: `${level.type === 'support' ? 'S' : 'R'}${level.strength > 1 ? level.strength : ''}: ${level.price.toFixed(1)}`,
-                        position: 'left',
-                        fill: level.type === 'support' ? '#10b981' : '#ef4444',
-                        fontSize: 12,
-                      }}
-                    />
-                  ))}
+                  supportResistanceLevels
+                    .filter((_, idx) => isLineVisible(idx))
+                    .map((level, idx) => (
+                      <ReferenceLine
+                        key={`sr-${idx}`}
+                        yAxisId="price"
+                        y={level.price}
+                        stroke={level.type === 'support' ? '#10b981' : '#ef4444'}
+                        strokeDasharray="5 5"
+                        strokeWidth={2}
+                        style={{ cursor: 'pointer' }}
+                        label={{
+                          value: `${level.type === 'support' ? 'S' : 'R'}${level.strength > 1 ? level.strength : ''}: ${level.price.toFixed(1)}`,
+                          position: 'left',
+                          fill: level.type === 'support' ? '#10b981' : '#ef4444',
+                          fontSize: 12,
+                        }}
+                      />
+                    ))}
 
                 {/* Swing Trading Entry Zones */}
                 {swingTradingMode &&
@@ -1315,57 +1418,65 @@ const StockChart: React.FC<StockChartProps> = ({
                   const slPercentChange =
                     ((pattern.stopLoss - pattern.entryPrice) / pattern.entryPrice) * 100;
 
+                  const patternId = `${pattern.code || pattern.name}-${idx}`;
+
                   return (
                     <g key={`trade-lines-${idx}`}>
                       {/* Entry Line */}
-                      <ReferenceLine
-                        yAxisId="price"
-                        y={pattern.entryPrice}
-                        stroke="#3b82f6"
-                        strokeWidth={2}
-                        strokeDasharray="0"
-                        label={{
-                          value: `ENTRY: $${pattern.entryPrice.toFixed(2)}`,
-                          position: 'left',
-                          fill: '#3b82f6',
-                          fontSize: 11,
-                          fontWeight: 'bold',
-                        }}
-                      />
+                      {isPatternLineVisible(patternId, 'entry') && (
+                        <ReferenceLine
+                          yAxisId="price"
+                          y={pattern.entryPrice}
+                          stroke="#3b82f6"
+                          strokeWidth={2}
+                          strokeDasharray="0"
+                          label={{
+                            value: `ENTRY: $${pattern.entryPrice.toFixed(2)}`,
+                            position: 'left',
+                            fill: '#3b82f6',
+                            fontSize: 11,
+                            fontWeight: 'bold',
+                          }}
+                        />
+                      )}
 
                       {/* Take Profit Line */}
-                      <ReferenceLine
-                        yAxisId="price"
-                        y={pattern.targetPrice}
-                        stroke="#10b981"
-                        strokeWidth={2}
-                        strokeDasharray="5 5"
-                        strokeOpacity={0.8}
-                        label={{
-                          value: `TP: $${pattern.targetPrice.toFixed(2)} (+${tpPercentChange.toFixed(1)}%)`,
-                          position: 'right',
-                          fill: '#10b981',
-                          fontSize: 11,
-                          fontWeight: 'bold',
-                        }}
-                      />
+                      {isPatternLineVisible(patternId, 'takeProfit') && (
+                        <ReferenceLine
+                          yAxisId="price"
+                          y={pattern.targetPrice}
+                          stroke="#10b981"
+                          strokeWidth={2}
+                          strokeDasharray="5 5"
+                          strokeOpacity={0.8}
+                          label={{
+                            value: `TP: $${pattern.targetPrice.toFixed(2)} (+${tpPercentChange.toFixed(1)}%)`,
+                            position: 'right',
+                            fill: '#10b981',
+                            fontSize: 11,
+                            fontWeight: 'bold',
+                          }}
+                        />
+                      )}
 
                       {/* Stop Loss Line */}
-                      <ReferenceLine
-                        yAxisId="price"
-                        y={pattern.stopLoss}
-                        stroke="#ef4444"
-                        strokeWidth={2}
-                        strokeDasharray="5 5"
-                        strokeOpacity={0.8}
-                        label={{
-                          value: `SL: $${pattern.stopLoss.toFixed(2)} (${slPercentChange.toFixed(1)}%)`,
-                          position: 'center',
-                          fill: '#ef4444',
-                          fontSize: 11,
-                          fontWeight: 'bold',
-                        }}
-                      />
+                      {isPatternLineVisible(patternId, 'stopLoss') && (
+                        <ReferenceLine
+                          yAxisId="price"
+                          y={pattern.stopLoss}
+                          stroke="#ef4444"
+                          strokeWidth={2}
+                          strokeDasharray="5 5"
+                          strokeOpacity={0.8}
+                          label={{
+                            value: `SL: $${pattern.stopLoss.toFixed(2)} (${slPercentChange.toFixed(1)}%)`,
+                            position: 'center',
+                            fill: '#ef4444',
+                            fontSize: 11,
+                            fontWeight: 'bold',
+                          }}
+                        />
+                      )}
                     </g>
                   );
                 })}
@@ -1393,7 +1504,7 @@ const StockChart: React.FC<StockChartProps> = ({
                       stroke="#ffffff"
                       strokeWidth={2}
                       label={{
-                        value: `${pattern.code || pattern.name.substring(0, 2).toUpperCase()}`,
+                        value: pattern.code || pattern.name.substring(0, 3).toUpperCase(),
                         position: 'top',
                         fill:
                           pattern.signal === 'bullish'
@@ -1401,10 +1512,10 @@ const StockChart: React.FC<StockChartProps> = ({
                             : pattern.signal === 'bearish'
                               ? '#ef4444'
                               : '#3b82f6',
-                        fontSize: 10,
+                        fontSize: 11,
                         fontWeight: 'bold',
                       }}
-                      data-tooltip={`${pattern.name}: ${pattern.description || `${pattern.signal} signal with ${pattern.probability}% confidence`}`}
+                      title={`${pattern.name}\n${pattern.description || `${pattern.signal.toUpperCase()} signal`}\nConfidence: ${pattern.confidence} (${pattern.probability}%)`}
                       onClick={() => onPatternClick && onPatternClick(pattern)}
                       style={{ cursor: 'pointer' }}
                     />
@@ -1671,6 +1782,155 @@ const StockChart: React.FC<StockChartProps> = ({
 
       {/* Oscillator Charts */}
       {renderOscillatorCharts()}
+
+      {/* Support/Resistance Line Controls */}
+      {supportResistanceLevels && supportResistanceLevels.length > 0 && (
+        <div className="mt-4 p-3 bg-muted/50 rounded-lg border border-border">
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <button
+              onClick={toggleSupportResistance}
+              className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
+                supportResistanceVisible
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
+              }`}
+            >
+              S/R Lines {supportResistanceVisible ? 'ON' : 'OFF'}
+            </button>
+            <span className="text-xs text-muted-foreground">|</span>
+            <span className="text-xs font-medium text-foreground">
+              Individual Lines:{' '}
+              {selectedSRLines.size === 0 ? 'All Visible' : `${selectedSRLines.size} Selected`}
+            </span>
+            {selectedSRLines.size > 0 && (
+              <button
+                onClick={() => setSelectedSRLines(new Set())}
+                className="px-2 py-1 text-xs font-medium rounded bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+              >
+                Show All
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {supportResistanceLevels.map((level, idx) => (
+              <button
+                key={`sr-toggle-${idx}`}
+                onClick={() => toggleSRLine(idx)}
+                className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                  isLineVisible(idx)
+                    ? level.type === 'support'
+                      ? 'bg-green-600 text-white'
+                      : 'bg-red-600 text-white'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                }`}
+                title={`Click to ${isLineVisible(idx) ? 'hide' : 'show'} ${level.type} at $${level.price.toFixed(1)} (${level.strength} touches)`}
+              >
+                {level.type === 'support' ? 'S' : 'R'}
+                {level.strength > 1 ? level.strength : ''}: ${level.price.toFixed(1)}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Pattern Line Controls */}
+      {detectedPatterns && detectedPatterns.length > 0 && (
+        <div className="mt-4 p-3 bg-muted/50 rounded-lg border border-border">
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <span className="text-xs font-bold text-foreground">Pattern Lines:</span>
+            <button
+              onClick={() => togglePatternLineType('entry')}
+              className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                patternLinesVisible.entry
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
+              }`}
+            >
+              Entry {patternLinesVisible.entry ? 'ON' : 'OFF'}
+            </button>
+            <button
+              onClick={() => togglePatternLineType('takeProfit')}
+              className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                patternLinesVisible.takeProfit
+                  ? 'bg-green-600 text-white'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
+              }`}
+            >
+              TP {patternLinesVisible.takeProfit ? 'ON' : 'OFF'}
+            </button>
+            <button
+              onClick={() => togglePatternLineType('stopLoss')}
+              className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                patternLinesVisible.stopLoss
+                  ? 'bg-red-600 text-white'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
+              }`}
+            >
+              SL {patternLinesVisible.stopLoss ? 'ON' : 'OFF'}
+            </button>
+            <span className="text-xs text-muted-foreground">|</span>
+            <span className="text-xs font-medium text-foreground">
+              Individual Pattern Lines:{' '}
+              {selectedPatternLines.size === 0
+                ? 'All Visible'
+                : `${selectedPatternLines.size} Selected`}
+            </span>
+            {selectedPatternLines.size > 0 && (
+              <button
+                onClick={() => setSelectedPatternLines(new Set())}
+                className="px-2 py-1 text-xs font-medium rounded bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+              >
+                Show All
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {detectedPatterns.map((pattern, idx) => {
+              const patternId = `${pattern.code || pattern.name}-${idx}`;
+              return (
+                <div key={patternId} className="flex gap-1">
+                  <span className="text-xs font-medium text-foreground px-1">
+                    {pattern.code || pattern.name}:
+                  </span>
+                  <button
+                    onClick={() => togglePatternLine(patternId, 'entry')}
+                    className={`px-1 py-1 text-xs font-medium rounded transition-colors ${
+                      isPatternLineVisible(patternId, 'entry')
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    }`}
+                    title={`Toggle entry line for ${pattern.name}`}
+                  >
+                    E
+                  </button>
+                  <button
+                    onClick={() => togglePatternLine(patternId, 'takeProfit')}
+                    className={`px-1 py-1 text-xs font-medium rounded transition-colors ${
+                      isPatternLineVisible(patternId, 'takeProfit')
+                        ? 'bg-green-600 text-white'
+                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    }`}
+                    title={`Toggle take profit line for ${pattern.name}`}
+                  >
+                    TP
+                  </button>
+                  <button
+                    onClick={() => togglePatternLine(patternId, 'stopLoss')}
+                    className={`px-1 py-1 text-xs font-medium rounded transition-colors ${
+                      isPatternLineVisible(patternId, 'stopLoss')
+                        ? 'bg-red-600 text-white'
+                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    }`}
+                    title={`Toggle stop loss line for ${pattern.name}`}
+                  >
+                    SL
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
