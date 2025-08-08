@@ -18,6 +18,16 @@ import { Separator } from '@/components/ui/separator';
 import toast from 'react-hot-toast';
 import { Loader2, TrendingUp } from 'lucide-react';
 
+// Helper function to get the correct app URL
+const getAppUrl = () => {
+  // Always use current origin in browser, which will be correct for both dev and production
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+  // Fallback for SSR
+  return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+};
+
 export default function RegisterPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
@@ -32,7 +42,7 @@ export default function RegisterPage() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: `${getAppUrl()}/auth/callback`,
         },
       });
 
@@ -66,7 +76,7 @@ export default function RegisterPage() {
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: `${getAppUrl()}/auth/callback`,
         },
       });
 
