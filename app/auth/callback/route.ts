@@ -37,13 +37,18 @@ export async function GET(request: NextRequest) {
     const forwardedHost = request.headers.get('x-forwarded-host');
     const isLocalEnv = process.env.NODE_ENV === 'development';
 
+    // Get the correct origin for redirect
+    let redirectOrigin;
     if (isLocalEnv) {
-      return NextResponse.redirect(`${requestUrl.origin}${next}`);
+      redirectOrigin = requestUrl.origin; // Use localhost in development
     } else if (forwardedHost) {
-      return NextResponse.redirect(`https://${forwardedHost}${next}`);
+      redirectOrigin = `https://${forwardedHost}`; // Use Vercel host in production
     } else {
-      return NextResponse.redirect(`${requestUrl.origin}${next}`);
+      // Use production URL from environment variable
+      redirectOrigin = process.env.NEXT_PUBLIC_SITE_URL || requestUrl.origin;
     }
+
+    return NextResponse.redirect(`${redirectOrigin}${next}`);
   } catch (err) {
     console.error('Unexpected error in auth callback:', err);
     return NextResponse.redirect(new URL('/auth/auth-code-error', request.url));
