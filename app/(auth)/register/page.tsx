@@ -20,12 +20,17 @@ import { Loader2, TrendingUp } from 'lucide-react';
 
 // Helper function to get the correct app URL
 const getAppUrl = () => {
-  // Always use current origin in browser, which will be correct for both dev and production
-  if (typeof window !== 'undefined') {
-    return window.location.origin;
-  }
-  // Fallback for SSR
-  return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  let url =
+    process?.env?.NEXT_PUBLIC_SITE_URL ?? // First choice: explicit site URL
+    process?.env?.NEXT_PUBLIC_VERCEL_URL ?? // Second choice: Vercel URL
+    (typeof window !== 'undefined' ? window.location.origin : '') ?? // Third choice: current origin
+    'http://localhost:3000'; // Fallback
+
+  // Ensure proper URL format
+  url = url.startsWith('http') ? url : `https://${url}`;
+  url = url.endsWith('/') ? url.slice(0, -1) : url;
+
+  return url;
 };
 
 export default function RegisterPage() {
