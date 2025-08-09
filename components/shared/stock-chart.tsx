@@ -27,6 +27,7 @@ import {
   PatternOverlay,
 } from '@/lib/services/pattern-detection';
 import { format } from 'date-fns';
+import FloatingIndicatorPanel from './floating-indicator-panel';
 
 interface StockChartProps {
   data: ChartDataPoint[];
@@ -325,63 +326,70 @@ const StockChart: React.FC<StockChartProps> = ({
     });
   }, [data, indicators, detectedPatterns]);
 
-  // Custom tooltip
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  // State for controlling indicator tooltip toggle
+  const [indicatorTooltipOpen, setIndicatorTooltipOpen] = useState(false);
+  const [indicatorTooltipData, setIndicatorTooltipData] = useState<any>(null);
+  const [indicatorTooltipPosition, setIndicatorTooltipPosition] = useState({ x: 0, y: 0 });
+  const [isFloatingPanelPinned, setIsFloatingPanelPinned] = useState(false);
+
+  // Custom tooltip with floating panel functionality
+  const CustomTooltip = ({ active, payload, label, coordinate }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
 
-      return (
-        <div className="bg-background border border-border rounded-lg p-3 shadow-lg">
-          <p className="font-semibold text-sm mb-2 text-foreground">{label}</p>
+      // Update tooltip data and position for floating panel
+      if (data !== indicatorTooltipData && coordinate) {
+        setIndicatorTooltipData(data);
+        // Convert chart coordinates to screen coordinates
+        const rect = document.querySelector('.recharts-wrapper')?.getBoundingClientRect();
+        if (rect) {
+          setIndicatorTooltipPosition({
+            x: rect.left + coordinate.x,
+            y: rect.top + coordinate.y,
+          });
+        }
+      }
 
-          {/* OHLC Data */}
-          <div className="space-y-1 text-xs">
-            <div className="flex justify-between gap-4">
-              <span className="text-muted-foreground">Open:</span>
-              <span className="font-mono text-foreground">${data.open?.toFixed(1)}</span>
+      return (
+        <div
+          className="bg-background border border-border rounded-lg p-2 shadow-lg cursor-pointer transition-all duration-200 hover:shadow-xl hover:scale-105"
+          onClick={e => {
+            e.stopPropagation();
+            setIndicatorTooltipOpen(!indicatorTooltipOpen);
+          }}
+          onDoubleClick={e => {
+            e.stopPropagation();
+            setIsFloatingPanelPinned(!isFloatingPanelPinned);
+            setIndicatorTooltipOpen(true);
+          }}
+        >
+          <div className="flex items-center justify-between mb-1">
+            <p className="font-semibold text-xs text-foreground">{label}</p>
+            <div className="flex items-center gap-1">
+              <button
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors px-1"
+                title="Click to expand, double-click to pin"
+              >
+                {indicatorTooltipOpen ? '−' : '+'}
+              </button>
+              {isFloatingPanelPinned && <span className="w-1 h-1 bg-primary rounded-full"></span>}
             </div>
-            <div className="flex justify-between gap-4">
-              <span className="text-muted-foreground">High:</span>
-              <span className="font-mono text-green-600">${data.high?.toFixed(1)}</span>
-            </div>
-            <div className="flex justify-between gap-4">
-              <span className="text-muted-foreground">Low:</span>
-              <span className="font-mono text-red-600">${data.low?.toFixed(1)}</span>
-            </div>
-            <div className="flex justify-between gap-4">
+          </div>
+
+          {/* Quick view - always visible */}
+          <div className="text-xs">
+            <div className="flex justify-between gap-2">
               <span className="text-muted-foreground">Close:</span>
               <span className="font-mono font-semibold text-foreground">
                 ${data.close?.toFixed(1)}
               </span>
             </div>
-            <div className="flex justify-between gap-4">
-              <span className="text-muted-foreground">Volume:</span>
-              <span className="font-mono text-foreground">{data.volumeM?.toFixed(2)}M</span>
-            </div>
+            {selectedIndicators.length > 0 && (
+              <div className="text-xs text-center text-muted-foreground mt-1 border-t pt-1">
+                Click for details • Double-click to pin
+              </div>
+            )}
           </div>
-
-          {/* Indicators */}
-          {selectedIndicators.includes('rsi') && data.rsi && (
-            <div className="mt-2 pt-2 border-t border-border">
-              <div className="flex justify-between gap-4 text-xs">
-                <span className="text-muted-foreground">RSI:</span>
-                <span className="font-mono text-foreground">{data.rsi.toFixed(2)}</span>
-              </div>
-            </div>
-          )}
-
-          {selectedIndicators.includes('macd') && data.macd && (
-            <div className="mt-2 pt-2 border-t border-border space-y-1 text-xs">
-              <div className="flex justify-between gap-4">
-                <span className="text-muted-foreground">MACD:</span>
-                <span className="font-mono text-foreground">{data.macd.toFixed(4)}</span>
-              </div>
-              <div className="flex justify-between gap-4">
-                <span className="text-muted-foreground">Signal:</span>
-                <span className="font-mono text-foreground">{data.macdSignal?.toFixed(4)}</span>
-              </div>
-            </div>
-          )}
         </div>
       );
     }
@@ -394,21 +402,40 @@ const StockChart: React.FC<StockChartProps> = ({
     if (detectedPatterns.length === 0) return null;
 
     return (
-      <div className="absolute top-2 left-16 bg-background/80 backdrop-blur-sm border border-border rounded-lg shadow-lg max-w-xs">
+      <div className="absolute top-2 left-16 bg-background/90 backdrop-blur-sm border border-border rounded-lg shadow-xl max-w-xs transition-all duration-300 hover:shadow-2xl">
         {/* Toggle Button */}
-        <div className="flex items-center justify-between p-2 border-b border-border">
-          <h4 className="text-sm font-semibold text-foreground">Active Patterns</h4>
+        <div className="flex items-center justify-between p-3 border-b border-border/50">
+          <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <span className="w-2 h-2 bg-primary rounded-full animate-pulse"></span>
+            Active Patterns ({detectedPatterns.length})
+          </h4>
           <button
             onClick={() => setShowPatternLegend(!showPatternLegend)}
-            className="p-1 hover:bg-muted rounded text-xs text-muted-foreground hover:text-foreground transition-colors"
+            className="flex-shrink-0 w-7 h-7 flex items-center justify-center hover:bg-muted/80 rounded-md text-sm text-muted-foreground hover:text-foreground transition-all duration-300 ease-in-out hover:scale-110"
             title={showPatternLegend ? 'Hide patterns' : 'Show patterns'}
           >
-            {showPatternLegend ? '−' : '+'}
+            <span
+              className={`transform transition-all duration-300 ease-in-out ${
+                showPatternLegend ? 'rotate-180' : 'rotate-0'
+              }`}
+            >
+              {showPatternLegend ? '−' : '+'}
+            </span>
           </button>
         </div>
 
-        {showPatternLegend && (
-          <div className="p-3 space-y-2 text-xs">
+        <div
+          className={`overflow-hidden transition-all duration-500 ease-in-out ${
+            showPatternLegend ? 'max-h-[32rem] opacity-100' : 'max-h-0 opacity-0'
+          }`}
+        >
+          <div
+            className={`p-3 space-y-3 text-xs transition-all duration-400 delay-100 ${
+              showPatternLegend
+                ? 'opacity-100 transform translate-y-0'
+                : 'opacity-0 transform -translate-y-2'
+            }`}
+          >
             {detectedPatterns.map((pattern, idx) => {
               const currentPrice = chartData[pattern.endIndex]?.close || 0;
               const entryPercentChange = ((pattern.entryPrice - currentPrice) / currentPrice) * 100;
@@ -420,7 +447,7 @@ const StockChart: React.FC<StockChartProps> = ({
               return (
                 <div
                   key={idx}
-                  className="p-2 bg-muted/30 rounded border-l-2"
+                  className="p-3 bg-muted/40 rounded-lg border-l-4 hover:bg-muted/60 transition-all duration-300 transform hover:scale-[1.02] cursor-pointer"
                   style={{
                     borderLeftColor:
                       pattern.signal === 'bullish'
@@ -428,54 +455,66 @@ const StockChart: React.FC<StockChartProps> = ({
                         : pattern.signal === 'bearish'
                           ? '#ef4444'
                           : '#3b82f6',
+                    animationDelay: `${idx * 100}ms`,
                   }}
+                  onClick={() => onPatternClick && onPatternClick(pattern)}
                 >
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-semibold">
-                      {pattern.code || pattern.name.substring(0, 3).toUpperCase()}
-                    </span>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-sm">
+                        {pattern.code || pattern.name.substring(0, 3).toUpperCase()}
+                      </span>
+                      <span
+                        className={`text-xs px-2 py-1 rounded-full font-medium transition-all duration-200 ${
+                          pattern.signal === 'bullish'
+                            ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                            : pattern.signal === 'bearish'
+                              ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                              : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                        }`}
+                      >
+                        {pattern.signal.toUpperCase()}
+                      </span>
+                    </div>
                     <span
-                      className={`text-xs px-1 py-0.5 rounded ${
-                        pattern.signal === 'bullish'
-                          ? 'bg-green-100 text-green-800'
-                          : pattern.signal === 'bearish'
-                            ? 'bg-red-100 text-red-800'
-                            : 'bg-blue-100 text-blue-800'
+                      className={`text-xs font-bold px-2 py-1 rounded-full ${
+                        pattern.confidence === 'high'
+                          ? 'bg-green-500/20 text-green-400'
+                          : pattern.confidence === 'medium'
+                            ? 'bg-yellow-500/20 text-yellow-400'
+                            : 'bg-red-500/20 text-red-400'
                       }`}
                     >
-                      {pattern.signal}
+                      {pattern.probability}%
                     </span>
                   </div>
 
-                  <div className="space-y-0.5">
-                    <div className="flex justify-between gap-2">
-                      <span className="text-blue-600 font-medium">ENTRY:</span>
-                      <span className="font-mono">${pattern.entryPrice.toFixed(2)}</span>
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between gap-2 items-center">
+                      <span className="text-blue-400 font-semibold text-xs flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>
+                        ENTRY:
+                      </span>
+                      <span className="font-mono text-foreground font-semibold">
+                        ${pattern.entryPrice.toFixed(2)}
+                      </span>
                     </div>
-                    <div className="flex justify-between gap-2">
-                      <span className="text-green-600 font-medium">TP:</span>
-                      <span className="font-mono">
+                    <div className="flex justify-between gap-2 items-center">
+                      <span className="text-green-400 font-semibold text-xs flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 bg-green-400 rounded-full"></span>
+                        TP:
+                      </span>
+                      <span className="font-mono text-green-400 font-semibold">
                         ${pattern.targetPrice.toFixed(2)} (+{tpPercentChange.toFixed(1)}%)
                       </span>
                     </div>
-                    <div className="flex justify-between gap-2">
-                      <span className="text-red-600 font-medium">SL:</span>
-                      <span className="font-mono">
-                        ${pattern.stopLoss.toFixed(2)} ({slPercentChange.toFixed(1)}%)
+                    <div className="flex justify-between gap-2 items-center">
+                      <span className="text-red-400 font-semibold text-xs flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 bg-red-400 rounded-full"></span>
+                        SL:
                       </span>
-                    </div>
-                    <div className="flex justify-between gap-2 pt-1 border-t border-border/50">
-                      <span className="text-muted-foreground">Confidence:</span>
-                      <span
-                        className={`font-medium ${
-                          pattern.confidence === 'high'
-                            ? 'text-green-600'
-                            : pattern.confidence === 'medium'
-                              ? 'text-yellow-600'
-                              : 'text-red-600'
-                        }`}
-                      >
-                        {pattern.confidence} ({pattern.probability}%)
+                      <span className="font-mono text-red-400 font-semibold">
+                        ${pattern.stopLoss.toFixed(2)} ({slPercentChange.toFixed(1)}%)
                       </span>
                     </div>
                   </div>
@@ -483,7 +522,7 @@ const StockChart: React.FC<StockChartProps> = ({
               );
             })}
           </div>
-        )}
+        </div>
       </div>
     );
   };
@@ -1928,6 +1967,21 @@ const StockChart: React.FC<StockChartProps> = ({
           </div>
         </div>
       )}
+
+      {/* Floating Indicator Panel */}
+      <FloatingIndicatorPanel
+        isOpen={indicatorTooltipOpen || isFloatingPanelPinned}
+        isPinned={isFloatingPanelPinned}
+        position={indicatorTooltipPosition}
+        data={indicatorTooltipData}
+        selectedIndicators={selectedIndicators}
+        onClose={() => {
+          setIndicatorTooltipOpen(false);
+          setIsFloatingPanelPinned(false);
+        }}
+        onPin={() => setIsFloatingPanelPinned(!isFloatingPanelPinned)}
+        onMove={position => setIndicatorTooltipPosition(position)}
+      />
     </div>
   );
 };

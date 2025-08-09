@@ -30,7 +30,7 @@ import {
 } from '@/components/ui/select';
 import StockChart from '@/components/shared/stock-chart';
 import PatternEvidencePanel from '@/components/shared/pattern-evidence-panel';
-import PatternDefinitions from '@/components/shared/pattern-definitions';
+import PatternConfigurationDrawer from '@/components/shared/pattern-configuration-drawer';
 import {
   ChartDataService,
   ChartDataPoint,
@@ -161,10 +161,12 @@ const ChartsPage: React.FC = () => {
   ]);
   const [swingTradingMode, setSwingTradingMode] = useState(false);
   const [intradayMode, setIntradayMode] = useState(false);
-  const [showPatternDefinitions, setShowPatternDefinitions] = useState(false);
   const [showPatternLegend, setShowPatternLegend] = useState(false);
+  const [showPatternDrawer, setShowPatternDrawer] = useState(false);
   const [dataFreshness, setDataFreshness] = useState<DataFreshnessInfo | null>(null);
   const [isRightPanelCollapsed, setIsRightPanelCollapsed] = useState(false);
+  const [isMarketDataCollapsed, setIsMarketDataCollapsed] = useState(false);
+  const [isIndicatorsCollapsed, setIsIndicatorsCollapsed] = useState(false);
 
   // Check cache first, then fetch if needed
   const {
@@ -326,7 +328,10 @@ const ChartsPage: React.FC = () => {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    toast.success('Chart data exported successfully');
+    toast.success('Chart data exported successfully', {
+      duration: 3000, // Auto-dismiss after 3 seconds for export confirmation
+      position: 'top-right',
+    });
   };
 
   const currentPrice =
@@ -338,22 +343,12 @@ const ChartsPage: React.FC = () => {
     priceChange && previousPrice ? (priceChange / previousPrice) * 100 : null;
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
-            <BarChart3 className="h-8 w-8 text-blue-600" />
-            Advanced Charts
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Professional charting with technical indicators and analysis tools
-          </p>
-        </div>
-
+    <div className="h-full flex flex-col space-y-4">
+      {/* Compact Header with Integrated Controls */}
+      <div className="bg-gradient-to-r from-card to-card/50 rounded-lg border shadow-sm">
         {currentPrice && (
-          <div className="text-right">
-            <div className="text-2xl font-bold">{symbol.toUpperCase()}</div>
+          <div className="flex items-center justify-between px-4 pt-4">
+            <div className="text-xl font-bold">{symbol.toUpperCase()}</div>
             <div className="flex items-center gap-2">
               <span className="text-lg font-semibold">${currentPrice.toFixed(2)}</span>
               {priceChange && (
@@ -371,37 +366,31 @@ const ChartsPage: React.FC = () => {
             </div>
           </div>
         )}
-      </div>
 
-      {/* Controls */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Chart Controls</CardTitle>
-          <CardDescription>Configure your chart display and analysis settings</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+        {/* Controls Bar */}
+        <div className="border-t bg-muted/20 backdrop-blur-sm p-4">
+          <div className="flex flex-wrap items-center gap-4">
             {/* Symbol Input */}
-            <div>
-              <label className="block text-sm font-medium mb-2">Symbol</label>
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium whitespace-nowrap">Symbol:</label>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   type="text"
                   value={symbol}
                   onChange={e => setCurrentSymbol(e.target.value.toUpperCase())}
-                  placeholder="Enter symbol (e.g., AAPL)"
-                  className="pl-10"
+                  placeholder="AAPL"
+                  className="pl-8 w-24 h-8"
                   onKeyPress={e => e.key === 'Enter' && handleSearch()}
                 />
               </div>
             </div>
 
             {/* Time Range */}
-            <div>
-              <label className="block text-sm font-medium mb-2">Time Range</label>
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium whitespace-nowrap">Range:</label>
               <Select value={timeRange} onValueChange={(value: TimeRange) => setTimeRange(value)}>
-                <SelectTrigger>
+                <SelectTrigger className="w-24 h-8">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -415,10 +404,10 @@ const ChartsPage: React.FC = () => {
             </div>
 
             {/* Chart Type */}
-            <div>
-              <label className="block text-sm font-medium mb-2">Chart Type</label>
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium whitespace-nowrap">Type:</label>
               <Select value={chartType} onValueChange={(value: ChartType) => setChartType(value)}>
-                <SelectTrigger>
+                <SelectTrigger className="w-28 h-8">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -434,33 +423,57 @@ const ChartsPage: React.FC = () => {
               </Select>
             </div>
 
+            {/* Pattern Detection Controls */}
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={() => setShowPatternDrawer(true)}
+                variant="outline"
+                className="h-8 px-3"
+                size="sm"
+              >
+                <Activity className="h-4 w-4" />
+                Configure Patterns
+              </Button>
+              <Button
+                onClick={() => setShowPatternLegend(true)}
+                variant="outline"
+                className="h-8 px-3"
+                size="sm"
+              >
+                <HelpCircle className="h-4 w-4" />
+                Codes
+              </Button>
+            </div>
+
             {/* Actions */}
-            <div className="flex items-end gap-2">
+            <div className="flex items-center gap-2 ml-auto">
               <Button
                 onClick={handleSearch}
                 disabled={isLoading || !symbol.trim()}
-                className="flex items-center gap-2"
+                className="h-8 px-3"
+                size="sm"
               >
                 {isLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <Search className="h-4 w-4" />
                 )}
-                Load Chart
+                Load
               </Button>
               <Button
                 onClick={handleExportData}
                 variant="outline"
                 disabled={!chartData || chartData.length === 0}
-                className="flex items-center gap-2"
+                className="h-8 px-3"
+                size="sm"
               >
                 <Download className="h-4 w-4" />
                 Export
               </Button>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Error Display */}
       {error && (
@@ -475,14 +488,14 @@ const ChartsPage: React.FC = () => {
         </Card>
       )}
 
-      {/* Main Content */}
-      <div
-        className={`grid grid-cols-1 gap-6 transition-all duration-300 ${
-          isRightPanelCollapsed ? 'xl:grid-cols-1' : 'xl:grid-cols-4'
-        }`}
-      >
-        {/* Chart Area */}
-        <div className={`relative ${isRightPanelCollapsed ? 'xl:col-span-1' : 'xl:col-span-3'}`}>
+      {/* Main Content - Optimized Layout */}
+      <div className="flex-1 flex flex-col lg:flex-row gap-4 min-h-0">
+        {/* Chart Area - Takes most space */}
+        <div
+          className={`flex-1 relative transition-all duration-300 ${
+            isRightPanelCollapsed ? '' : 'lg:flex-[3]'
+          }`}
+        >
           {/* Collapse Toggle Button */}
           <button
             onClick={() => setIsRightPanelCollapsed(!isRightPanelCollapsed)}
@@ -543,408 +556,266 @@ const ChartsPage: React.FC = () => {
           )}
         </div>
 
-        {/* Settings Panel */}
+        {/* Compact Settings Panel */}
         <div
-          className={`space-y-4 transition-all duration-300 ${
-            isRightPanelCollapsed ? 'hidden xl:hidden' : 'block'
+          className={`w-full lg:w-80 space-y-3 transition-all duration-300 ${
+            isRightPanelCollapsed ? 'hidden lg:hidden' : 'block'
           }`}
         >
-          {/* Technical Indicators */}
-          <Card>
-            <CardHeader>
+          {/* Compact Technical Indicators */}
+          <Card className="transition-all duration-300 hover:shadow-md">
+            <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5" />
-                  Technical Indicators
+                <CardTitle className="text-base flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4" />
+                  Indicators ({selectedIndicators.length})
                 </CardTitle>
-                <div className="flex gap-2">
+                <div className="flex gap-1 items-center">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setSelectedIndicators(INDICATOR_OPTIONS.map(i => i.id))}
-                    className="h-7 px-2 text-xs"
+                    className="h-6 px-2 text-xs transition-all duration-200 hover:scale-105"
                   >
-                    Select All
+                    All
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setSelectedIndicators([])}
-                    className="h-7 px-2 text-xs"
+                    className="h-6 px-2 text-xs transition-all duration-200 hover:scale-105"
                   >
-                    Deselect All
+                    None
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsIndicatorsCollapsed(!isIndicatorsCollapsed)}
+                    className="h-6 w-6 p-0 hover:bg-muted/80 transition-all duration-300"
+                  >
+                    <span
+                      className={`text-xs transition-transform duration-300 ${
+                        isIndicatorsCollapsed ? 'rotate-180' : 'rotate-0'
+                      }`}
+                    >
+                      ⌄
+                    </span>
                   </Button>
                 </div>
               </div>
             </CardHeader>
-            <CardContent>
-              <Tabs defaultValue="trend" className="w-full">
-                <TabsList className="grid w-full grid-cols-4">
-                  <TabsTrigger value="trend">Trend</TabsTrigger>
-                  <TabsTrigger value="momentum">Momentum</TabsTrigger>
-                  <TabsTrigger value="volatility">Volatility</TabsTrigger>
-                  <TabsTrigger value="volume">Volume</TabsTrigger>
-                </TabsList>
-
-                {['trend', 'momentum', 'volatility', 'volume'].map(category => (
-                  <TabsContent key={category} value={category} className="space-y-3 mt-4">
-                    {INDICATOR_OPTIONS.filter(indicator => indicator.category === category).map(
-                      indicator => (
-                        <div key={indicator.id} className="flex items-start space-x-2">
-                          <Checkbox
-                            id={indicator.id}
-                            checked={selectedIndicators.includes(indicator.id)}
-                            onCheckedChange={checked =>
-                              handleIndicatorToggle(indicator.id, checked as boolean)
-                            }
-                          />
-                          <div className="flex-1">
-                            <label
-                              htmlFor={indicator.id}
-                              className="text-sm font-medium cursor-pointer"
-                            >
-                              {indicator.name}
-                            </label>
-                            <p className="text-xs text-muted-foreground">{indicator.description}</p>
-                          </div>
-                        </div>
-                      )
-                    )}
-                  </TabsContent>
-                ))}
-              </Tabs>
-            </CardContent>
-          </Card>
-
-          {/* Pattern Detection Controls */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <Activity className="h-5 w-5" />
-                    Pattern Detection
-                  </CardTitle>
-                  <CardDescription>
-                    Algo-powered pattern recognition with probability analysis
-                  </CardDescription>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowPatternLegend(true)}
-                    className="flex items-center gap-1 text-xs"
-                  >
-                    <HelpCircle className="h-3 w-3" />
-                    <span className="hidden sm:inline">Pattern </span>Codes
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowPatternDefinitions(true)}
-                    className="flex items-center gap-1 text-xs"
-                  >
-                    <HelpCircle className="h-3 w-3" />
-                    <span className="hidden sm:inline">Learn </span>More
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {/* Swing Trading Mode Toggle */}
-                <div className="p-4 bg-gradient-to-r from-blue-900/20 to-indigo-900/20 border border-blue-500/30 rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="swing-trading-mode"
-                          checked={swingTradingMode}
-                          onCheckedChange={checked => {
-                            setSwingTradingMode(checked as boolean);
-                            if (checked) setIntradayMode(false); // Disable intraday mode
-                          }}
-                          className="border-blue-500 data-[state=checked]:bg-blue-600"
-                        />
-                        <label
-                          htmlFor="swing-trading-mode"
-                          className="text-sm font-semibold text-blue-200 cursor-pointer"
-                        >
-                          2-3 Day Swing Trading Mode
-                        </label>
-                      </div>
-                      <Badge
-                        variant="secondary"
-                        className="bg-blue-800/50 text-blue-200 text-xs border-blue-600"
-                      >
-                        EXCLUSIVE
-                      </Badge>
-                    </div>
-                    {swingTradingMode && (
-                      <Badge
-                        variant="outline"
-                        className="bg-green-900/30 text-green-300 border-green-600"
-                      >
-                        ACTIVE
-                      </Badge>
-                    )}
-                  </div>
-                  <p className="text-xs text-blue-300 mt-2 ml-5">
-                    {swingTradingMode
-                      ? 'All other patterns disabled. Showing only high-probability swing trades with trend + volume + momentum + price action confirmation.'
-                      : 'Enable to show only comprehensive swing trading signals with ATR-based stop loss & take profit levels. Disables all other pattern types.'}
-                  </p>
-                </div>
-
-                {/* Intraday Gap-Up Breakout Mode Toggle */}
-                <div className="p-4 bg-gradient-to-r from-green-900/20 to-emerald-900/20 border border-green-500/30 rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="intraday-mode"
-                          checked={intradayMode}
-                          onCheckedChange={checked => {
-                            setIntradayMode(checked as boolean);
-                            if (checked) setSwingTradingMode(false); // Disable swing mode
-                          }}
-                          className="border-green-500 data-[state=checked]:bg-green-600"
-                        />
-                        <label
-                          htmlFor="intraday-mode"
-                          className="text-sm font-semibold text-green-200 cursor-pointer"
-                        >
-                          Intraday Gap-Up Breakout Mode
-                        </label>
-                      </div>
-                      <Badge
-                        variant="secondary"
-                        className="bg-green-800/50 text-green-200 text-xs border-green-600"
-                      >
-                        NEW
-                      </Badge>
-                    </div>
-                    {intradayMode && (
-                      <Badge
-                        variant="outline"
-                        className="bg-orange-900/30 text-orange-300 border-orange-600"
-                      >
-                        ACTIVE
-                      </Badge>
-                    )}
-                  </div>
-                  <p className="text-xs text-green-300 mt-2 ml-5">
-                    {intradayMode
-                      ? 'Intraday gap-up breakout signals active. Identifies morning gaps >0.5% with volume confirmation, MA alignment, and favorable risk-reward ratios.'
-                      : 'Enable to detect intraday gap-up breakout opportunities with 72% historical win rate. Best for 5M-1H timeframes with volume confirmation.'}
-                  </p>
-                </div>
-
-                {/* Other Algos Control Buttons - Always Visible */}
-                <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-semibold">Other Algos</h4>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        setPatternTypes([
-                          'candlestick',
-                          'combination',
-                          'confluence',
-                          'swing_strategy',
-                        ])
-                      }
-                      className="h-7 px-2 text-xs"
-                    >
-                      Select All
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPatternTypes([])}
-                      className="h-7 px-2 text-xs"
-                    >
-                      Deselect All
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Other Algos Section - Always Visible */}
+            <CardContent className="pt-0">
+              <div
+                className={`overflow-hidden transition-all duration-500 ease-in-out ${
+                  !isIndicatorsCollapsed ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+                }`}
+              >
                 <div
-                  className={`space-y-3 ${swingTradingMode || intradayMode ? 'opacity-50' : ''}`}
+                  className={`transition-all duration-300 delay-100 ${
+                    !isIndicatorsCollapsed
+                      ? 'opacity-100 transform translate-y-0'
+                      : 'opacity-0 transform -translate-y-2'
+                  }`}
                 >
-                  <div className="space-y-3">
-                    {/* Candlestick Patterns */}
-                    <div className="flex items-start space-x-2">
-                      <Checkbox
-                        id="candlestick-patterns"
-                        checked={patternTypes.includes('candlestick')}
-                        onCheckedChange={checked =>
-                          handlePatternTypeToggle('candlestick', checked as boolean)
-                        }
-                      />
-                      <div className="flex-1">
-                        <label
-                          htmlFor="candlestick-patterns"
-                          className="text-sm font-medium cursor-pointer"
-                        >
-                          Candlestick Patterns
-                        </label>
-                        <p className="text-xs text-muted-foreground">
-                          Bullish/Bearish Engulfing, Hammer, Shooting Star, Doji (Swing Trading)
-                        </p>
-                      </div>
-                    </div>
+                  <Tabs defaultValue="trend" className="w-full">
+                    <TabsList className="grid w-full grid-cols-4 h-8 mb-3">
+                      <TabsTrigger value="trend" className="text-xs transition-all duration-200">
+                        Trend
+                      </TabsTrigger>
+                      <TabsTrigger value="momentum" className="text-xs transition-all duration-200">
+                        Momentum
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="volatility"
+                        className="text-xs transition-all duration-200"
+                      >
+                        Vol
+                      </TabsTrigger>
+                      <TabsTrigger value="volume" className="text-xs transition-all duration-200">
+                        Volume
+                      </TabsTrigger>
+                    </TabsList>
 
-                    {/* Combination Patterns */}
-                    <div className="flex items-start space-x-2">
-                      <Checkbox
-                        id="combination-patterns"
-                        checked={patternTypes.includes('combination')}
-                        onCheckedChange={checked =>
-                          handlePatternTypeToggle('combination', checked as boolean)
-                        }
-                      />
-                      <div className="flex-1">
-                        <label
-                          htmlFor="combination-patterns"
-                          className="text-sm font-medium cursor-pointer"
-                        >
-                          High-Probability Combinations
-                        </label>
-                        <p className="text-xs text-muted-foreground">
-                          Golden Cross + Pullback, Breakout + Volume, Support/Resistance + Patterns
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Confluence Patterns */}
-                    <div className="flex items-start space-x-2">
-                      <Checkbox
-                        id="confluence-patterns"
-                        checked={patternTypes.includes('confluence')}
-                        onCheckedChange={checked =>
-                          handlePatternTypeToggle('confluence', checked as boolean)
-                        }
-                      />
-                      <div className="flex-1">
-                        <label
-                          htmlFor="confluence-patterns"
-                          className="text-sm font-medium cursor-pointer"
-                        >
-                          Confluence Analysis
-                        </label>
-                        <p className="text-xs text-muted-foreground">
-                          Multiple factor confirmation (Pattern + Support/Resistance + Volume)
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Swing Strategy */}
-                    <div className="flex items-start space-x-2">
-                      <Checkbox
-                        id="swing-strategy"
-                        checked={patternTypes.includes('swing_strategy')}
-                        onCheckedChange={checked =>
-                          handlePatternTypeToggle('swing_strategy', checked as boolean)
-                        }
-                      />
-                      <div className="flex-1">
-                        <label
-                          htmlFor="swing-strategy"
-                          className="text-sm font-medium cursor-pointer"
-                        >
-                          Triple Confirmation Bounce 🎯
-                        </label>
-                        <p className="text-xs text-muted-foreground">
-                          Complete swing trade strategy: Uptrend + Support + Momentum (5-15 day
-                          holds)
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Algorithm Info */}
-                    <div className="bg-muted/30 rounded-lg p-3 mt-4">
-                      <div className="flex items-start gap-2">
-                        <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5" />
-                        <div className="text-xs">
-                          <strong>How it works:</strong> Our algorithms analyze candlestick
-                          formations, support/resistance levels, volume patterns, and moving average
-                          relationships to identify high-probability trading setups. Each pattern
-                          includes historical win rates and risk/reward ratios.
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Note about mode interaction */}
-                    {(swingTradingMode || intradayMode) && (
-                      <div className="text-xs text-muted-foreground mt-3 p-2 bg-muted/20 rounded">
-                        <strong>Note:</strong> Other algorithms are available but may not show
-                        results while exclusive trading modes are active.
-                      </div>
-                    )}
-                  </div>
+                    {['trend', 'momentum', 'volatility', 'volume'].map(category => (
+                      <TabsContent key={category} value={category} className="space-y-2 mt-0">
+                        {INDICATOR_OPTIONS.filter(indicator => indicator.category === category).map(
+                          (indicator, idx) => (
+                            <div
+                              key={indicator.id}
+                              className="flex items-center space-x-3 py-2 px-2 rounded-lg hover:bg-muted/50 transition-all duration-200 cursor-pointer group"
+                              style={{ animationDelay: `${idx * 50}ms` }}
+                            >
+                              <Checkbox
+                                id={indicator.id}
+                                checked={selectedIndicators.includes(indicator.id)}
+                                onCheckedChange={checked =>
+                                  handleIndicatorToggle(indicator.id, checked as boolean)
+                                }
+                                className="transition-all duration-200"
+                              />
+                              <div className="flex-1">
+                                <label
+                                  htmlFor={indicator.id}
+                                  className="text-xs font-medium cursor-pointer leading-tight group-hover:text-foreground transition-colors duration-200"
+                                >
+                                  {indicator.name}
+                                </label>
+                                <p className="text-xs text-muted-foreground mt-0.5 group-hover:text-muted-foreground/80 transition-colors duration-200">
+                                  {indicator.description}
+                                </p>
+                              </div>
+                              {selectedIndicators.includes(indicator.id) && (
+                                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                              )}
+                            </div>
+                          )
+                        )}
+                      </TabsContent>
+                    ))}
+                  </Tabs>
                 </div>
-
-                {/* Swing Trading Mode Info - Temporarily Simplified */}
-                {swingTradingMode && (
-                  <div className="bg-gradient-to-r from-green-900/20 to-emerald-900/20 border border-green-500/30 rounded-lg p-4">
-                    <h4 className="text-sm font-semibold text-green-200 mb-2">
-                      Enhanced Swing Trading Algorithm Active
-                    </h4>
-                    <p className="text-xs text-green-300">
-                      Algorithm is analyzing trend, volume, momentum, and price action for
-                      high-probability swing trades.
-                    </p>
-                  </div>
-                )}
               </div>
             </CardContent>
           </Card>
 
           {/* Market Info */}
           {chartData && chartData.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Market Data</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Open:</span>
-                  <span className="font-mono">
-                    ${chartData[chartData.length - 1].open.toFixed(2)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">High:</span>
-                  <span className="font-mono text-green-600">
-                    ${chartData[chartData.length - 1].high.toFixed(2)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Low:</span>
-                  <span className="font-mono text-red-600">
-                    ${chartData[chartData.length - 1].low.toFixed(2)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Volume:</span>
-                  <span className="font-mono">
-                    {chartData[chartData.length - 1].volume.toLocaleString()}
-                  </span>
-                </div>
-
-                {/* Technical Indicator Values */}
-                {selectedIndicators.includes('rsi') && indicators.rsi && (
-                  <div className="flex justify-between pt-2 border-t">
-                    <span className="text-muted-foreground">RSI (14):</span>
-                    <span className="font-mono">
-                      {indicators.rsi[indicators.rsi.length - 1]?.toFixed(2) || 'N/A'}
+            <Card className="transition-all duration-300 hover:shadow-md">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                    Market Data
+                  </CardTitle>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsMarketDataCollapsed(!isMarketDataCollapsed)}
+                    className="h-6 w-6 p-0 hover:bg-muted/80 transition-all duration-300"
+                  >
+                    <span
+                      className={`text-xs transition-transform duration-300 ${
+                        isMarketDataCollapsed ? 'rotate-180' : 'rotate-0'
+                      }`}
+                    >
+                      ⌄
                     </span>
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div
+                  className={`overflow-hidden transition-all duration-500 ease-in-out ${
+                    !isMarketDataCollapsed ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+                  }`}
+                >
+                  <div
+                    className={`space-y-2 text-sm transition-all duration-300 delay-100 ${
+                      !isMarketDataCollapsed
+                        ? 'opacity-100 transform translate-y-0'
+                        : 'opacity-0 transform -translate-y-2'
+                    }`}
+                  >
+                    <div className="flex justify-between items-center p-2 rounded-lg hover:bg-muted/50 transition-colors duration-200">
+                      <span className="text-muted-foreground">Open:</span>
+                      <span className="font-mono font-semibold">
+                        ${chartData[chartData.length - 1].open.toFixed(1)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center p-2 rounded-lg hover:bg-muted/50 transition-colors duration-200">
+                      <span className="text-muted-foreground">High:</span>
+                      <span className="font-mono text-green-600 font-semibold">
+                        ${chartData[chartData.length - 1].high.toFixed(1)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center p-2 rounded-lg hover:bg-muted/50 transition-colors duration-200">
+                      <span className="text-muted-foreground">Low:</span>
+                      <span className="font-mono text-red-600 font-semibold">
+                        ${chartData[chartData.length - 1].low.toFixed(1)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center p-2 rounded-lg hover:bg-muted/50 transition-colors duration-200">
+                      <span className="text-muted-foreground">Volume:</span>
+                      <span className="font-mono font-semibold">
+                        {(chartData[chartData.length - 1].volume / 1000000).toFixed(2)}M
+                      </span>
+                    </div>
+
+                    {/* Technical Indicator Values */}
+                    {selectedIndicators.length > 0 && (
+                      <div className="pt-2 border-t border-border/50">
+                        <h5 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                          Indicators
+                        </h5>
+                        <div className="space-y-2">
+                          {selectedIndicators.includes('rsi') && indicators.rsi && (
+                            <div className="flex justify-between items-center p-2 rounded-lg hover:bg-purple-50/50 dark:hover:bg-purple-900/20 transition-colors duration-200">
+                              <span className="text-muted-foreground flex items-center gap-2">
+                                <span className="w-1.5 h-1.5 bg-purple-500 rounded-full"></span>
+                                RSI (14):
+                              </span>
+                              <span
+                                className={`font-mono font-semibold ${
+                                  indicators.rsi[indicators.rsi.length - 1] > 70
+                                    ? 'text-red-500'
+                                    : indicators.rsi[indicators.rsi.length - 1] < 30
+                                      ? 'text-green-500'
+                                      : 'text-foreground'
+                                }`}
+                              >
+                                {indicators.rsi[indicators.rsi.length - 1]?.toFixed(2) || 'N/A'}
+                              </span>
+                            </div>
+                          )}
+
+                          {selectedIndicators.includes('macd') && indicators.macd && (
+                            <div className="flex justify-between items-center p-2 rounded-lg hover:bg-blue-50/50 dark:hover:bg-blue-900/20 transition-colors duration-200">
+                              <span className="text-muted-foreground flex items-center gap-2">
+                                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>
+                                MACD:
+                              </span>
+                              <span className="font-mono font-semibold text-foreground">
+                                {indicators.macd.macd[indicators.macd.macd.length - 1]?.toFixed(
+                                  4
+                                ) || 'N/A'}
+                              </span>
+                            </div>
+                          )}
+
+                          {selectedIndicators.includes('sma20') && indicators.sma?.sma20 && (
+                            <div className="flex justify-between items-center p-2 rounded-lg hover:bg-amber-50/50 dark:hover:bg-amber-900/20 transition-colors duration-200">
+                              <span className="text-muted-foreground flex items-center gap-2">
+                                <span className="w-1.5 h-1.5 bg-amber-500 rounded-full"></span>
+                                SMA 20:
+                              </span>
+                              <span className="font-mono font-semibold text-foreground">
+                                $
+                                {indicators.sma.sma20[indicators.sma.sma20.length - 1]?.toFixed(
+                                  2
+                                ) || 'N/A'}
+                              </span>
+                            </div>
+                          )}
+
+                          {selectedIndicators.includes('sma50') && indicators.sma?.sma50 && (
+                            <div className="flex justify-between items-center p-2 rounded-lg hover:bg-red-50/50 dark:hover:bg-red-900/20 transition-colors duration-200">
+                              <span className="text-muted-foreground flex items-center gap-2">
+                                <span className="w-1.5 h-1.5 bg-red-500 rounded-full"></span>
+                                SMA 50:
+                              </span>
+                              <span className="font-mono font-semibold text-foreground">
+                                $
+                                {indicators.sma.sma50[indicators.sma.sma50.length - 1]?.toFixed(
+                                  2
+                                ) || 'N/A'}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
               </CardContent>
             </Card>
           )}
@@ -957,10 +828,16 @@ const ChartsPage: React.FC = () => {
       {/* Pattern Legend Modal */}
       <PatternLegend isOpen={showPatternLegend} onClose={() => setShowPatternLegend(false)} />
 
-      {/* Pattern Definitions Modal */}
-      <PatternDefinitions
-        isOpen={showPatternDefinitions}
-        onClose={() => setShowPatternDefinitions(false)}
+      {/* Pattern Configuration Drawer */}
+      <PatternConfigurationDrawer
+        isOpen={showPatternDrawer}
+        onClose={() => setShowPatternDrawer(false)}
+        patternTypes={patternTypes}
+        onPatternTypeToggle={handlePatternTypeToggle}
+        swingTradingMode={swingTradingMode}
+        onSwingTradingToggle={setSwingTradingMode}
+        intradayMode={intradayMode}
+        onIntradayToggle={setIntradayMode}
       />
     </div>
   );

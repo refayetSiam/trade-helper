@@ -67,9 +67,9 @@ export default async function Home() {
             <Card className="bg-background">
               <CardContent className="p-6">
                 <LineChart className="h-12 w-12 text-primary mb-4" />
-                <h3 className="text-xl font-semibold mb-2">Technical Analysis</h3>
+                <h3 className="text-xl font-semibold mb-2">Charts</h3>
                 <p className="text-muted-foreground">
-                  Comprehensive indicators including RSI, MACD, Bollinger Bands, and more
+                  Technical indicators for non-technical traders
                 </p>
               </CardContent>
             </Card>
@@ -87,10 +87,8 @@ export default async function Home() {
             <Card className="bg-background">
               <CardContent className="p-6">
                 <Shield className="h-12 w-12 text-primary mb-4" />
-                <h3 className="text-xl font-semibold mb-2">Covered Call Screener</h3>
-                <p className="text-muted-foreground">
-                  Find optimal covered call opportunities with Greeks analysis
-                </p>
+                <h3 className="text-xl font-semibold mb-2">Options Analysis</h3>
+                <p className="text-muted-foreground">LOC-based covered call strategies</p>
               </CardContent>
             </Card>
 
