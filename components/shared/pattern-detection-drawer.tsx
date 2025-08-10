@@ -563,7 +563,6 @@ const PatternDetectionDrawer: React.FC<PatternDetectionDrawerProps> = ({
                       <div className="flex items-center gap-2">
                         <Checkbox
                           checked={allEnabled}
-                          indeterminate={someEnabled}
                           onCheckedChange={checked =>
                             toggleAllPatternsInFolder(folder.id, checked as boolean)
                           }

@@ -149,9 +149,28 @@ const StockChart: React.FC<StockChartProps> = ({
 
     // Swing Trading Mode: Only show swing trading signals
     if (swingTradingMode) {
+      // Convert indicators to the format expected by detectSwingTradingSignals
+      const compatibleIndicators = {
+        rsi: indicators.rsi?.filter((val): val is number => val !== null),
+        macd: indicators.macd
+          ? {
+              macd: indicators.macd.macd.filter((val): val is number => val !== null),
+              signal: indicators.macd.signal.filter((val): val is number => val !== null),
+              histogram: indicators.macd.histogram.filter((val): val is number => val !== null),
+            }
+          : undefined,
+        sma: indicators.sma
+          ? {
+              sma50: indicators.sma.sma50?.filter((val): val is number => val !== null),
+              sma200: indicators.sma.sma200?.filter((val): val is number => val !== null),
+            }
+          : undefined,
+        atr: indicators.atr?.filter((val): val is number => val !== null),
+      };
+
       const swingSignals = PatternDetectionService.detectSwingTradingSignals(
         data,
-        indicators,
+        compatibleIndicators,
         supportResistance
       );
       allPatterns = [...allPatterns, ...swingSignals];
@@ -620,7 +639,7 @@ const StockChart: React.FC<StockChartProps> = ({
         return (
           <div className="relative" onWheel={handleWheel}>
             <ResponsiveContainer width="100%" height={height}>
-              <ComposedChart data={chartData} isAnimationActive={false} onClick={handleChartClick}>
+              <ComposedChart data={chartData} onClick={handleChartClick}>
                 <defs>
                   <linearGradient id="colorClose" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
@@ -662,17 +681,10 @@ const StockChart: React.FC<StockChartProps> = ({
                 <Tooltip
                   content={<CustomTooltip />}
                   cursor={{ stroke: '#3b82f6', strokeWidth: 1, strokeDasharray: '3 3' }}
-                  isAnimationActive={false}
                 />
 
                 {/* Volume Bars */}
-                <Bar
-                  yAxisId="volume"
-                  dataKey="volume"
-                  name="Volume"
-                  shape={VolumeBar}
-                  isAnimationActive={false}
-                />
+                <Bar yAxisId="volume" dataKey="volume" name="Volume" shape={VolumeBar} />
 
                 {/* Price Area */}
                 <Area
@@ -691,7 +703,6 @@ const StockChart: React.FC<StockChartProps> = ({
                   }}
                   activeDot={{ r: 5, strokeWidth: 2, stroke: '#3b82f6', fill: '#3b82f6' }}
                   name={`${symbol} Close`}
-                  isAnimationActive={false}
                 />
 
                 {/* Moving Averages */}
@@ -705,7 +716,6 @@ const StockChart: React.FC<StockChartProps> = ({
                     dot={false}
                     connectNulls={false}
                     name="SMA 20"
-                    isAnimationActive={false}
                   />
                 )}
                 {selectedIndicators.includes('sma50') && (
@@ -718,7 +728,6 @@ const StockChart: React.FC<StockChartProps> = ({
                     dot={false}
                     connectNulls={false}
                     name="SMA 50"
-                    isAnimationActive={false}
                   />
                 )}
                 {selectedIndicators.includes('bollinger') && (
@@ -733,7 +742,6 @@ const StockChart: React.FC<StockChartProps> = ({
                       dot={false}
                       connectNulls={false}
                       name="BB Upper"
-                      isAnimationActive={false}
                     />
                     <Line
                       yAxisId="price"
@@ -745,7 +753,6 @@ const StockChart: React.FC<StockChartProps> = ({
                       dot={false}
                       connectNulls={false}
                       name="BB Lower"
-                      isAnimationActive={false}
                     />
                   </>
                 )}
@@ -926,7 +933,6 @@ const StockChart: React.FC<StockChartProps> = ({
                   startIndex={zoomDomain?.left || 0}
                   endIndex={zoomDomain?.right || chartData.length - 1}
                   onChange={handleZoom}
-                  isAnimationActive={false}
                 />
               </ComposedChart>
             </ResponsiveContainer>
@@ -962,7 +968,7 @@ const StockChart: React.FC<StockChartProps> = ({
         return (
           <div className="relative" onWheel={handleWheel}>
             <ResponsiveContainer width="100%" height={height}>
-              <ComposedChart data={chartData} isAnimationActive={false} onClick={handleChartClick}>
+              <ComposedChart data={chartData} onClick={handleChartClick}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                 <XAxis
                   dataKey="dateStr"
@@ -998,24 +1004,16 @@ const StockChart: React.FC<StockChartProps> = ({
                 <Tooltip
                   content={<CustomTooltip />}
                   cursor={{ stroke: '#3b82f6', strokeWidth: 1, strokeDasharray: '3 3' }}
-                  isAnimationActive={false}
                 />
 
                 {/* Volume Bars */}
-                <Bar
-                  yAxisId="volume"
-                  dataKey="volume"
-                  name="Volume"
-                  shape={VolumeBar}
-                  isAnimationActive={false}
-                />
+                <Bar yAxisId="volume" dataKey="volume" name="Volume" shape={VolumeBar} />
 
                 {/* Candlestick */}
                 <Bar
                   yAxisId="price"
                   dataKey="close"
                   name={`${symbol} Price`}
-                  isAnimationActive={false}
                   shape={(props: any) => {
                     const { x, y, width, height, payload } = props;
                     if (!payload) return <></>; // Return empty fragment instead of null
@@ -1077,7 +1075,6 @@ const StockChart: React.FC<StockChartProps> = ({
                     dot={false}
                     connectNulls={false}
                     name="SMA 20"
-                    isAnimationActive={false}
                   />
                 )}
                 {selectedIndicators.includes('sma50') && (
@@ -1090,7 +1087,6 @@ const StockChart: React.FC<StockChartProps> = ({
                     dot={false}
                     connectNulls={false}
                     name="SMA 50"
-                    isAnimationActive={false}
                   />
                 )}
                 {selectedIndicators.includes('sma200') && (
@@ -1103,7 +1099,6 @@ const StockChart: React.FC<StockChartProps> = ({
                     dot={false}
                     connectNulls={false}
                     name="SMA 200"
-                    isAnimationActive={false}
                   />
                 )}
 
@@ -1283,7 +1278,6 @@ const StockChart: React.FC<StockChartProps> = ({
                   startIndex={zoomDomain?.left || 0}
                   endIndex={zoomDomain?.right || chartData.length - 1}
                   onChange={handleZoom}
-                  isAnimationActive={false}
                 />
               </ComposedChart>
             </ResponsiveContainer>
@@ -1320,7 +1314,7 @@ const StockChart: React.FC<StockChartProps> = ({
         return (
           <div className="relative" onWheel={handleWheel}>
             <ResponsiveContainer width="100%" height={height}>
-              <ComposedChart data={chartData} isAnimationActive={false} onClick={handleChartClick}>
+              <ComposedChart data={chartData} onClick={handleChartClick}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                 <XAxis
                   dataKey="dateStr"
@@ -1356,17 +1350,10 @@ const StockChart: React.FC<StockChartProps> = ({
                 <Tooltip
                   content={<CustomTooltip />}
                   cursor={{ stroke: '#3b82f6', strokeWidth: 1, strokeDasharray: '3 3' }}
-                  isAnimationActive={false}
                 />
 
                 {/* Volume Bars */}
-                <Bar
-                  yAxisId="volume"
-                  dataKey="volume"
-                  name="Volume"
-                  shape={VolumeBar}
-                  isAnimationActive={false}
-                />
+                <Bar yAxisId="volume" dataKey="volume" name="Volume" shape={VolumeBar} />
 
                 {/* Price Line */}
                 <Line
@@ -1384,7 +1371,6 @@ const StockChart: React.FC<StockChartProps> = ({
                   }}
                   activeDot={{ r: 5, strokeWidth: 2, stroke: '#3b82f6', fill: '#3b82f6' }}
                   name={`${symbol} Close`}
-                  isAnimationActive={false}
                 />
 
                 {/* Moving Averages */}
@@ -1398,7 +1384,6 @@ const StockChart: React.FC<StockChartProps> = ({
                     dot={false}
                     connectNulls={false}
                     name="SMA 20"
-                    isAnimationActive={false}
                   />
                 )}
                 {selectedIndicators.includes('sma50') && (
@@ -1411,7 +1396,6 @@ const StockChart: React.FC<StockChartProps> = ({
                     dot={false}
                     connectNulls={false}
                     name="SMA 50"
-                    isAnimationActive={false}
                   />
                 )}
                 {selectedIndicators.includes('sma200') && (
@@ -1424,7 +1408,6 @@ const StockChart: React.FC<StockChartProps> = ({
                     dot={false}
                     connectNulls={false}
                     name="SMA 200"
-                    isAnimationActive={false}
                   />
                 )}
                 {selectedIndicators.includes('ema12') && (
@@ -1437,7 +1420,6 @@ const StockChart: React.FC<StockChartProps> = ({
                     dot={false}
                     connectNulls={false}
                     name="EMA 12"
-                    isAnimationActive={false}
                   />
                 )}
                 {selectedIndicators.includes('ema26') && (
@@ -1450,7 +1432,6 @@ const StockChart: React.FC<StockChartProps> = ({
                     dot={false}
                     connectNulls={false}
                     name="EMA 26"
-                    isAnimationActive={false}
                   />
                 )}
                 {selectedIndicators.includes('vwap') && (
@@ -1463,7 +1444,6 @@ const StockChart: React.FC<StockChartProps> = ({
                     dot={false}
                     connectNulls={false}
                     name="VWAP"
-                    isAnimationActive={false}
                   />
                 )}
 
@@ -1480,7 +1460,6 @@ const StockChart: React.FC<StockChartProps> = ({
                       dot={false}
                       connectNulls={false}
                       name="BB Upper"
-                      isAnimationActive={false}
                     />
                     <Line
                       yAxisId="price"
@@ -1491,7 +1470,6 @@ const StockChart: React.FC<StockChartProps> = ({
                       dot={false}
                       connectNulls={false}
                       name="BB Middle"
-                      isAnimationActive={false}
                     />
                     <Line
                       yAxisId="price"
@@ -1503,7 +1481,6 @@ const StockChart: React.FC<StockChartProps> = ({
                       dot={false}
                       connectNulls={false}
                       name="BB Lower"
-                      isAnimationActive={false}
                     />
                   </>
                 )}
@@ -1684,7 +1661,6 @@ const StockChart: React.FC<StockChartProps> = ({
                   startIndex={zoomDomain?.left || 0}
                   endIndex={zoomDomain?.right || chartData.length - 1}
                   onChange={handleZoom}
-                  isAnimationActive={false}
                 />
               </ComposedChart>
             </ResponsiveContainer>
@@ -1735,7 +1711,7 @@ const StockChart: React.FC<StockChartProps> = ({
               RSI (14)
             </h4>
             <ResponsiveContainer width="100%" height={120}>
-              <LineChart data={chartData} isAnimationActive={false}>
+              <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                 <XAxis
                   dataKey="dateStr"
@@ -1767,7 +1743,6 @@ const StockChart: React.FC<StockChartProps> = ({
                   strokeWidth={2}
                   dot={false}
                   connectNulls={false}
-                  isAnimationActive={false}
                 />
                 {/* RSI levels */}
                 <Line
@@ -1777,7 +1752,6 @@ const StockChart: React.FC<StockChartProps> = ({
                   strokeWidth={1}
                   strokeDasharray="3 3"
                   dot={false}
-                  isAnimationActive={false}
                 />
                 <Line
                   type="monotone"
@@ -1786,7 +1760,6 @@ const StockChart: React.FC<StockChartProps> = ({
                   strokeWidth={1}
                   strokeDasharray="3 3"
                   dot={false}
-                  isAnimationActive={false}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -1800,7 +1773,7 @@ const StockChart: React.FC<StockChartProps> = ({
               MACD (12, 26, 9)
             </h4>
             <ResponsiveContainer width="100%" height={120}>
-              <ComposedChart data={chartData} isAnimationActive={false} onClick={handleChartClick}>
+              <ComposedChart data={chartData} onClick={handleChartClick}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                 <XAxis
                   dataKey="dateStr"
@@ -1824,12 +1797,7 @@ const StockChart: React.FC<StockChartProps> = ({
                     color: '#ffffff',
                   }}
                 />
-                <Bar
-                  dataKey="macdHistogram"
-                  fill="#6b7280"
-                  opacity={0.6}
-                  isAnimationActive={false}
-                />
+                <Bar dataKey="macdHistogram" fill="#6b7280" opacity={0.6} />
                 <Line
                   type="monotone"
                   dataKey="macd"
@@ -1837,7 +1805,6 @@ const StockChart: React.FC<StockChartProps> = ({
                   strokeWidth={2}
                   dot={false}
                   connectNulls={false}
-                  isAnimationActive={false}
                 />
                 <Line
                   type="monotone"
@@ -1846,7 +1813,6 @@ const StockChart: React.FC<StockChartProps> = ({
                   strokeWidth={2}
                   dot={false}
                   connectNulls={false}
-                  isAnimationActive={false}
                 />
               </ComposedChart>
             </ResponsiveContainer>
@@ -1860,7 +1826,7 @@ const StockChart: React.FC<StockChartProps> = ({
               Stochastic (14, 3)
             </h4>
             <ResponsiveContainer width="100%" height={120}>
-              <LineChart data={chartData} isAnimationActive={false}>
+              <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                 <XAxis
                   dataKey="dateStr"
@@ -1892,7 +1858,6 @@ const StockChart: React.FC<StockChartProps> = ({
                   strokeWidth={2}
                   dot={false}
                   connectNulls={false}
-                  isAnimationActive={false}
                 />
                 <Line
                   type="monotone"
@@ -1901,7 +1866,6 @@ const StockChart: React.FC<StockChartProps> = ({
                   strokeWidth={2}
                   dot={false}
                   connectNulls={false}
-                  isAnimationActive={false}
                 />
                 {/* Stochastic levels */}
                 <Line
@@ -1911,7 +1875,6 @@ const StockChart: React.FC<StockChartProps> = ({
                   strokeWidth={1}
                   strokeDasharray="3 3"
                   dot={false}
-                  isAnimationActive={false}
                 />
                 <Line
                   type="monotone"
@@ -1920,7 +1883,6 @@ const StockChart: React.FC<StockChartProps> = ({
                   strokeWidth={1}
                   strokeDasharray="3 3"
                   dot={false}
-                  isAnimationActive={false}
                 />
               </LineChart>
             </ResponsiveContainer>

@@ -2147,7 +2147,14 @@ export class PatternDetectionService {
       // Look for bullish divergence: price makes lower low, RSI makes higher low
       const priceLows = this.findLocalLows(recentData, 3);
       const rsiLows = this.findLocalLows(
-        recentRSI.map((r, i) => ({ close: r, volume: 0, high: r, low: r, open: r, timestamp: 0 })),
+        recentRSI.map((r: number | null, i: number) => ({
+          close: r,
+          volume: 0,
+          high: r,
+          low: r,
+          open: r,
+          timestamp: 0,
+        })),
         3
       );
 
@@ -2201,7 +2208,14 @@ export class PatternDetectionService {
       // Bearish divergence: price makes higher high, RSI makes lower high
       const priceHighs = this.findLocalHighs(recentData, 3);
       const rsiHighs = this.findLocalHighs(
-        recentRSI.map((r, i) => ({ close: r, volume: 0, high: r, low: r, open: r, timestamp: 0 })),
+        recentRSI.map((r: number | null, i: number) => ({
+          close: r,
+          volume: 0,
+          high: r,
+          low: r,
+          open: r,
+          timestamp: 0,
+        })),
         3
       );
 

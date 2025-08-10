@@ -621,7 +621,6 @@ const PatternConfigurationDrawer: React.FC<PatternConfigurationDrawerProps> = ({
 
                           <Checkbox
                             checked={allEnabled}
-                            indeterminate={someEnabled || undefined}
                             onCheckedChange={checked =>
                               toggleAllPatternsInFolder(folder.id, checked as boolean)
                             }

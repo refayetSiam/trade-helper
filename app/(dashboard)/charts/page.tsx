@@ -791,14 +791,24 @@ const ChartsPage: React.FC = () => {
                               </span>
                               <span
                                 className={`font-mono font-semibold ${
-                                  indicators.rsi[indicators.rsi.length - 1] > 70
+                                  indicators.rsi &&
+                                  indicators.rsi[indicators.rsi.length - 1] !== null &&
+                                  indicators.rsi[indicators.rsi.length - 1] !== undefined &&
+                                  indicators.rsi[indicators.rsi.length - 1]! > 70
                                     ? 'text-red-500'
-                                    : indicators.rsi[indicators.rsi.length - 1] < 30
+                                    : indicators.rsi &&
+                                        indicators.rsi[indicators.rsi.length - 1] !== null &&
+                                        indicators.rsi[indicators.rsi.length - 1] !== undefined &&
+                                        indicators.rsi[indicators.rsi.length - 1]! < 30
                                       ? 'text-green-500'
                                       : 'text-foreground'
                                 }`}
                               >
-                                {indicators.rsi[indicators.rsi.length - 1]?.toFixed(2) || 'N/A'}
+                                {indicators.rsi &&
+                                indicators.rsi[indicators.rsi.length - 1] !== null &&
+                                indicators.rsi[indicators.rsi.length - 1] !== undefined
+                                  ? indicators.rsi[indicators.rsi.length - 1]!.toFixed(2)
+                                  : 'N/A'}
                               </span>
                             </div>
                           )}

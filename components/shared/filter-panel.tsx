@@ -96,7 +96,7 @@ export interface QuickButtonState {
 
 export interface FilterPanelProps {
   filters: FilterValues;
-  onFiltersChange: (filters: FilterValues) => void;
+  onFiltersChange: (filters: FilterValues | ((prev: FilterValues) => FilterValues)) => void;
   validationErrors?: ValidationErrors;
   onValidationErrors?: (errors: ValidationErrors) => void;
   currentPrice?: number;

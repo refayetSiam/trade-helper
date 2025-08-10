@@ -70,9 +70,9 @@ const ChartPointDetailsModal: React.FC<ChartPointDetailsModalProps> = ({
       case 'vwap':
         return indicators.vwap?.[idx] ? `$${indicators.vwap[idx].toFixed(2)}` : 'N/A';
       case 'bollinger':
-        const upper = indicators.bollinger?.upper?.[idx]?.toFixed(2);
-        const middle = indicators.bollinger?.middle?.[idx]?.toFixed(2);
-        const lower = indicators.bollinger?.lower?.[idx]?.toFixed(2);
+        const upper = indicators.bollingerBands?.upper?.[idx]?.toFixed(2);
+        const middle = indicators.bollingerBands?.middle?.[idx]?.toFixed(2);
+        const lower = indicators.bollingerBands?.lower?.[idx]?.toFixed(2);
         return upper && middle && lower ? `${upper}/${middle}/${lower}` : 'N/A';
       case 'obv':
         return indicators.obv?.[idx] ? (indicators.obv[idx] / 1000000).toFixed(2) + 'M' : 'N/A';

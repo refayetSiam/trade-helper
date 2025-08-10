@@ -6,6 +6,7 @@ export interface ChartDataPoint {
   close: number;
   volume: number;
   adjClose?: number;
+  index?: number;
 }
 
 export interface DataFreshnessInfo {
@@ -142,9 +143,9 @@ export class ChartDataService {
     let avgGain = gains / period;
     let avgLoss = losses / period;
 
-    // Fill initial values with null
+    // Fill initial values with null - cast to maintain array type
     for (let i = 0; i < period; i++) {
-      rsi.push(null);
+      rsi.push(null as any);
     }
 
     // Calculate RSI
@@ -181,7 +182,13 @@ export class ChartDataService {
       if (i < slowPeriod - 1) {
         macd.push(null);
       } else {
-        macd.push(ema12[i] - ema26[i]);
+        const ema12Val = ema12[i];
+        const ema26Val = ema26[i];
+        if (ema12Val !== null && ema26Val !== null) {
+          macd.push(ema12Val - ema26Val);
+        } else {
+          macd.push(null);
+        }
       }
     }
 
@@ -199,7 +206,13 @@ export class ChartDataService {
       if (i < slowPeriod - 1) {
         histogram.push(null);
       } else {
-        histogram.push(macd[i] - signal[i]);
+        const macdVal = macd[i];
+        const signalVal = signal[i];
+        if (macdVal !== null && signalVal !== null) {
+          histogram.push(macdVal - signalVal);
+        } else {
+          histogram.push(null);
+        }
       }
     }
 
@@ -240,7 +253,12 @@ export class ChartDataService {
 
     // Calculate EMA
     for (let i = period; i < data.length; i++) {
-      ema.push((data[i] - ema[i - 1]) * multiplier + ema[i - 1]);
+      const prevEma = ema[i - 1];
+      if (prevEma !== null) {
+        ema.push((data[i] - prevEma) * multiplier + prevEma);
+      } else {
+        ema.push(null);
+      }
     }
 
     return ema;
@@ -260,11 +278,16 @@ export class ChartDataService {
       } else {
         const slice = closes.slice(i - period + 1, i + 1);
         const mean = middle[i];
-        const variance = slice.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / period;
-        const std = Math.sqrt(variance);
+        if (mean !== null) {
+          const variance = slice.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / period;
+          const std = Math.sqrt(variance);
 
-        upper.push(mean + stdDev * std);
-        lower.push(mean - stdDev * std);
+          upper.push(mean + stdDev * std);
+          lower.push(mean - stdDev * std);
+        } else {
+          upper.push(null);
+          lower.push(null);
+        }
       }
     }
 
@@ -306,12 +329,17 @@ export class ChartDataService {
     const obv: (number | null)[] = [0]; // Starting with 0 is correct for OBV baseline
 
     for (let i = 1; i < data.length; i++) {
-      if (data[i].close > data[i - 1].close) {
-        obv.push(obv[i - 1] + data[i].volume);
-      } else if (data[i].close < data[i - 1].close) {
-        obv.push(obv[i - 1] - data[i].volume);
+      const prevObv = obv[i - 1];
+      if (prevObv !== null) {
+        if (data[i].close > data[i - 1].close) {
+          obv.push(prevObv + data[i].volume);
+        } else if (data[i].close < data[i - 1].close) {
+          obv.push(prevObv - data[i].volume);
+        } else {
+          obv.push(prevObv);
+        }
       } else {
-        obv.push(obv[i - 1]);
+        obv.push(null);
       }
     }
 
@@ -363,8 +391,12 @@ export class ChartDataService {
           // Smoothed ATR: (previousATR * (period - 1) + currentTR) / period
           const prevATR = atr[i - 1];
           const currentTR = trueRanges[i];
-          const smoothedATR = (prevATR * (period - 1) + currentTR) / period;
-          atr.push(smoothedATR);
+          if (prevATR !== null) {
+            const smoothedATR = (prevATR * (period - 1) + currentTR) / period;
+            atr.push(smoothedATR);
+          } else {
+            atr.push(null);
+          }
         }
       }
     }
@@ -373,7 +405,7 @@ export class ChartDataService {
   }
 
   // Calculate Volume Moving Average
-  static calculateVolumeMA(data: ChartDataPoint[], period = 20): number[] {
+  static calculateVolumeMA(data: ChartDataPoint[], period = 20): (number | null)[] {
     const volumes = data.map(d => d.volume);
     return this.calculateSMA(volumes, period);
   }
