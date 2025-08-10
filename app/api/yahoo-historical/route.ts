@@ -1,36 +1,83 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { yahooFinanceService } from '@/lib/services/yahoo-finance';
-import { TimeRange } from '@/lib/services/chart-data';
+import {
+  authenticateApiRequest,
+  createApiError,
+  checkRateLimit,
+  getClientIdentifier,
+} from '@/lib/auth/api-auth';
+import { getValidatedParams, historicalDataRequestSchema } from '@/lib/validation/api-schemas';
 
 export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const symbol = searchParams.get('symbol');
-  const range = (searchParams.get('range') || '3M') as TimeRange;
-  const interval = searchParams.get('interval');
-
-  if (!symbol) {
-    return NextResponse.json({ error: 'Symbol is required' }, { status: 400 });
-  }
-
   try {
+    // 1. Authenticate request
+    const authContext = await authenticateApiRequest(request);
+    if (!authContext.isAuthenticated) {
+      return NextResponse.json(createApiError('Authentication required', 401), { status: 401 });
+    }
+
+    // 2. Check rate limiting
+    const clientId = getClientIdentifier(request, authContext.user?.id);
+    const rateLimit = checkRateLimit(clientId, 15 * 60 * 1000, 100); // 100 requests per 15 minutes
+
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        createApiError('Rate limit exceeded', 429, { resetTime: rateLimit.resetTime }),
+        {
+          status: 429,
+          headers: {
+            'X-RateLimit-Limit': '100',
+            'X-RateLimit-Remaining': '0',
+            'X-RateLimit-Reset': rateLimit.resetTime.toString(),
+          },
+        }
+      );
+    }
+
+    // 3. Validate input parameters
+    const validation = getValidatedParams(
+      request.nextUrl.searchParams,
+      historicalDataRequestSchema
+    );
+    if (!validation.success) {
+      return NextResponse.json(
+        createApiError('Invalid request parameters', 400, { errors: validation.errors }),
+        { status: 400 }
+      );
+    }
+
+    const { symbol, range, interval } = validation.data as {
+      symbol: string;
+      range: any;
+      interval: string | null;
+    };
+
+    // 4. Fetch data from provider
     const chartData = await yahooFinanceService.getHistoricalData(symbol, range, interval);
 
-    return NextResponse.json({
-      symbol,
-      range,
-      interval,
-      chartData,
-      dataPoints: chartData.length,
-    });
-  } catch (error) {
+    // 5. Return successful response with rate limit headers
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : 'Unknown error occurred',
         symbol,
         range,
         interval,
+        chartData,
+        dataPoints: chartData.length,
       },
-      { status: 500 }
+      {
+        headers: {
+          'X-RateLimit-Limit': '100',
+          'X-RateLimit-Remaining': rateLimit.remainingRequests.toString(),
+          'X-RateLimit-Reset': rateLimit.resetTime.toString(),
+        },
+      }
     );
+  } catch (error) {
+    // Log error for debugging (don't expose to client)
+    console.error('Historical data API error:', error);
+
+    return NextResponse.json(createApiError('Unable to fetch historical data at this time', 500), {
+      status: 500,
+    });
   }
 }

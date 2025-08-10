@@ -6,7 +6,12 @@ export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get('code');
   const error = requestUrl.searchParams.get('error');
-  const next = requestUrl.searchParams.get('next') ?? '/charts';
+
+  // Security: Validate redirect URL against allowlist to prevent open redirect attacks
+  const requestedNext = requestUrl.searchParams.get('next');
+  const ALLOWED_REDIRECTS = ['/charts', '/options', '/watchlist', '/'];
+  const next =
+    requestedNext && ALLOWED_REDIRECTS.includes(requestedNext) ? requestedNext : '/charts';
 
   // Handle OAuth provider errors
   if (error) {
