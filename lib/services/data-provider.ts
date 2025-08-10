@@ -1,4 +1,5 @@
 import { yahooFinanceService } from './yahoo-finance';
+import { browserYahooFinanceService } from './browser-yahoo-finance';
 import { polygonService } from './polygon';
 import { ChartDataPoint, TimeRange, DataFreshnessInfo } from './chart-data';
 
@@ -32,6 +33,11 @@ class DataProviderService {
     fallbackEnabled: true,
   };
 
+  // Detect if we're running in browser vs server environment
+  private get isBrowser(): boolean {
+    return typeof window !== 'undefined';
+  }
+
   private requestCounts = new Map<DataSource, { count: number; resetTime: number }>();
   private maxCallsPerMinute = 100; // Generous limit for combined services
 
@@ -43,13 +49,11 @@ class DataProviderService {
   // Set data source preference
   setDataSource(source: DataSource) {
     this.config.primarySource = source;
-    console.log(`🔄 Data source switched to ${this.getSourceLabel(source)}`);
   }
 
   // Toggle fallback behavior
   setFallbackEnabled(enabled: boolean) {
     this.config.fallbackEnabled = enabled;
-    console.log(`🔄 Fallback ${enabled ? 'enabled' : 'disabled'}`);
   }
 
   // Get human-readable source label
@@ -106,26 +110,32 @@ class DataProviderService {
   }
 
   // Fetch chart data with intelligent source selection
-  async getChartData(symbol: string, range: TimeRange): Promise<ChartDataWithSource> {
+  async getChartData(
+    symbol: string,
+    range: TimeRange,
+    interval?: string | null
+  ): Promise<ChartDataWithSource> {
     const primarySource = this.config.primarySource;
     const fallbackSource: DataSource = primarySource === 'source1' ? 'source2' : 'source1';
 
     // Try primary source first
     try {
-      console.log(
-        `📡 Fetching chart data for ${symbol} from ${this.getSourceLabel(primarySource)}`
-      );
       this.trackRequest(primarySource);
 
       let result;
       if (primarySource === 'source1') {
-        // Yahoo Finance
-        const data = await yahooFinanceService.getHistoricalData(symbol, range);
+        // Yahoo Finance - use browser-compatible service in browser environment
+        let data;
+        if (this.isBrowser) {
+          data = await browserYahooFinanceService.getHistoricalData(symbol, range, interval);
+        } else {
+          data = await yahooFinanceService.getHistoricalData(symbol, range, interval);
+        }
         const freshness = this.createFreshnessInfo(data, range);
         result = { data, freshness };
       } else {
         // Polygon
-        result = await polygonService.getStockAggregates(symbol, range, 'high');
+        result = await polygonService.getStockAggregates(symbol, range, 'high', interval);
       }
 
       return {
@@ -134,26 +144,28 @@ class DataProviderService {
         sourceLabel: this.getSourceLabel(primarySource),
       };
     } catch (primaryError) {
-      console.warn(`❌ ${this.getSourceLabel(primarySource)} failed:`, primaryError);
-
       if (!this.config.fallbackEnabled) {
         throw primaryError;
       }
 
       // Try fallback source
       try {
-        console.log(`🔄 Falling back to ${this.getSourceLabel(fallbackSource)}`);
         this.trackRequest(fallbackSource);
 
         let result;
         if (fallbackSource === 'source1') {
-          // Yahoo Finance
-          const data = await yahooFinanceService.getHistoricalData(symbol, range);
+          // Yahoo Finance - use browser-compatible service in browser environment
+          let data;
+          if (this.isBrowser) {
+            data = await browserYahooFinanceService.getHistoricalData(symbol, range, interval);
+          } else {
+            data = await yahooFinanceService.getHistoricalData(symbol, range, interval);
+          }
           const freshness = this.createFreshnessInfo(data, range);
           result = { data, freshness };
         } else {
           // Polygon
-          result = await polygonService.getStockAggregates(symbol, range, 'high');
+          result = await polygonService.getStockAggregates(symbol, range, 'high', interval);
         }
 
         return {
@@ -162,15 +174,13 @@ class DataProviderService {
           sourceLabel: `${this.getSourceLabel(fallbackSource)} (fallback)`,
         };
       } catch (fallbackError) {
-        console.error(
-          `❌ Both data sources failed. Primary:`,
+        // Provide user-friendly error messages
+        const friendlyError = this.getFriendlyErrorMessage(
           primaryError,
-          'Fallback:',
-          fallbackError
+          fallbackError,
+          'chart data'
         );
-        throw new Error(
-          `All data sources failed. Primary: ${primaryError instanceof Error ? primaryError.message : String(primaryError)}, Fallback: ${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}`
-        );
+        throw new Error(friendlyError);
       }
     }
   }
@@ -182,13 +192,17 @@ class DataProviderService {
 
     // Try primary source first
     try {
-      console.log(`📡 Fetching quote for ${symbol} from ${this.getSourceLabel(primarySource)}`);
       this.trackRequest(primarySource);
 
       let quote;
       if (primarySource === 'source1') {
-        // Yahoo Finance
-        const result = await yahooFinanceService.getQuote(symbol);
+        // Yahoo Finance - use browser-compatible service in browser environment
+        let result;
+        if (this.isBrowser) {
+          result = await browserYahooFinanceService.getQuote(symbol);
+        } else {
+          result = await yahooFinanceService.getQuote(symbol);
+        }
         quote = {
           price: result.regularMarketPrice,
           timestamp: Date.now(),
@@ -209,21 +223,23 @@ class DataProviderService {
         sourceLabel: this.getSourceLabel(primarySource),
       };
     } catch (primaryError) {
-      console.warn(`❌ ${this.getSourceLabel(primarySource)} quote failed:`, primaryError);
-
       if (!this.config.fallbackEnabled) {
         throw primaryError;
       }
 
       // Try fallback source
       try {
-        console.log(`🔄 Quote fallback to ${this.getSourceLabel(fallbackSource)}`);
         this.trackRequest(fallbackSource);
 
         let quote;
         if (fallbackSource === 'source1') {
-          // Yahoo Finance
-          const result = await yahooFinanceService.getQuote(symbol);
+          // Yahoo Finance - use browser-compatible service in browser environment
+          let result;
+          if (this.isBrowser) {
+            result = await browserYahooFinanceService.getQuote(symbol);
+          } else {
+            result = await yahooFinanceService.getQuote(symbol);
+          }
           quote = {
             price: result.regularMarketPrice,
             timestamp: Date.now(),
@@ -244,15 +260,13 @@ class DataProviderService {
           sourceLabel: `${this.getSourceLabel(fallbackSource)} (fallback)`,
         };
       } catch (fallbackError) {
-        console.error(
-          `❌ Both quote sources failed. Primary:`,
+        // Provide user-friendly error messages
+        const friendlyError = this.getFriendlyErrorMessage(
           primaryError,
-          'Fallback:',
-          fallbackError
+          fallbackError,
+          'stock quote'
         );
-        throw new Error(
-          `All quote sources failed. Primary: ${primaryError instanceof Error ? primaryError.message : String(primaryError)}, Fallback: ${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}`
-        );
+        throw new Error(friendlyError);
       }
     }
   }
@@ -264,9 +278,6 @@ class DataProviderService {
 
     // Try primary source first
     try {
-      console.log(
-        `📡 Fetching options chain for ${symbol} from ${this.getSourceLabel(primarySource)}`
-      );
       this.trackRequest(primarySource);
 
       let result;
@@ -284,15 +295,12 @@ class DataProviderService {
         sourceLabel: this.getSourceLabel(primarySource),
       };
     } catch (primaryError) {
-      console.warn(`❌ ${this.getSourceLabel(primarySource)} options failed:`, primaryError);
-
       if (!this.config.fallbackEnabled) {
         throw primaryError;
       }
 
       // Try fallback source
       try {
-        console.log(`🔄 Options fallback to ${this.getSourceLabel(fallbackSource)}`);
         this.trackRequest(fallbackSource);
 
         let result;
@@ -310,15 +318,13 @@ class DataProviderService {
           sourceLabel: `${this.getSourceLabel(fallbackSource)} (fallback)`,
         };
       } catch (fallbackError) {
-        console.error(
-          `❌ Both options sources failed. Primary:`,
+        // Provide user-friendly error messages
+        const friendlyError = this.getFriendlyErrorMessage(
           primaryError,
-          'Fallback:',
-          fallbackError
+          fallbackError,
+          'options data'
         );
-        throw new Error(
-          `All options sources failed. Primary: ${primaryError instanceof Error ? primaryError.message : String(primaryError)}, Fallback: ${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}`
-        );
+        throw new Error(friendlyError);
       }
     }
   }
@@ -429,9 +435,63 @@ class DataProviderService {
 
   // Clear all caches
   clearAllCaches() {
-    yahooFinanceService.clearCache?.();
+    if (this.isBrowser) {
+      browserYahooFinanceService.clearCache();
+    } else {
+      yahooFinanceService.clearCache?.();
+    }
     polygonService.clearCache();
-    console.log('🧹 All data provider caches cleared');
+  }
+
+  // Generate user-friendly error messages from technical errors
+  private getFriendlyErrorMessage(primaryError: any, fallbackError: any, dataType: string): string {
+    const primaryMsg = primaryError instanceof Error ? primaryError.message : String(primaryError);
+    const fallbackMsg =
+      fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+
+    // Check for common error patterns and provide friendly messages
+    if (primaryMsg.includes('401') || fallbackMsg.includes('401')) {
+      return `Unable to fetch ${dataType} due to API authentication issues. Please check your API keys and try again.`;
+    }
+
+    if (primaryMsg.includes('403') || fallbackMsg.includes('403')) {
+      return `Access denied when fetching ${dataType}. Your API subscription may not include this data type.`;
+    }
+
+    if (
+      primaryMsg.includes('404') ||
+      primaryMsg.includes('Invalid symbol') ||
+      primaryMsg.includes('not found')
+    ) {
+      return `The requested stock symbol was not found. Please verify the symbol is correct and actively traded.`;
+    }
+
+    if (
+      primaryMsg.includes('429') ||
+      fallbackMsg.includes('429') ||
+      primaryMsg.includes('rate limit')
+    ) {
+      return `API rate limit exceeded. Please wait a moment and try again.`;
+    }
+
+    if (
+      primaryMsg.includes('NetworkError') ||
+      primaryMsg.includes('Failed to fetch') ||
+      primaryMsg.includes('ECONNREFUSED')
+    ) {
+      return `Network connection error. Please check your internet connection and try again.`;
+    }
+
+    if (primaryMsg.includes('URLSearchParams') || primaryMsg.includes('Invalid options')) {
+      return `Data service configuration error. This usually resolves automatically - please try again.`;
+    }
+
+    if (primaryMsg.includes('options') && primaryMsg.includes('not available')) {
+      return `Options data is not available for this symbol. The stock may not have listed options or the market may be closed.`;
+    }
+
+    // If no specific pattern matches, provide a generic but helpful message
+    return `Unable to fetch ${dataType} at this time. This may be due to API issues or market hours. Please try again later.`;
   }
 }
 

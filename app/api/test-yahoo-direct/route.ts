@@ -5,8 +5,6 @@ export async function GET(request: NextRequest) {
   const symbol = searchParams.get('symbol') || 'AAPL';
 
   try {
-    console.log(`Testing Yahoo Finance API for ${symbol}...`);
-
     const url = `https://query2.finance.yahoo.com/v8/finance/chart/${symbol}?range=1M&interval=1d`;
 
     const response = await fetch(url, {
@@ -16,8 +14,6 @@ export async function GET(request: NextRequest) {
         Accept: 'application/json',
       },
     });
-
-    console.log(`Yahoo Finance API Status: ${response.status}`);
 
     if (!response.ok) {
       return NextResponse.json(
@@ -31,15 +27,6 @@ export async function GET(request: NextRequest) {
     }
 
     const data = await response.json();
-
-    console.log('Yahoo Finance Response Structure:', {
-      hasChart: !!data.chart,
-      hasResult: !!data.chart?.result,
-      resultsCount: data.chart?.result?.length || 0,
-      hasTimestamp: !!data.chart?.result?.[0]?.timestamp,
-      timestampCount: data.chart?.result?.[0]?.timestamp?.length || 0,
-      hasQuote: !!data.chart?.result?.[0]?.indicators?.quote?.[0],
-    });
 
     if (!data.chart || !data.chart.result || data.chart.result.length === 0) {
       return NextResponse.json(
@@ -72,7 +59,6 @@ export async function GET(request: NextRequest) {
       meta: result.meta,
     });
   } catch (error) {
-    console.error('Yahoo Finance test error:', error);
     return NextResponse.json(
       {
         error: 'Failed to test Yahoo Finance API',

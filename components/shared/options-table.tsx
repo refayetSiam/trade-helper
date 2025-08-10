@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { ChevronUp, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import CalculationTooltip from './calculation-tooltip';
 
 export interface OptionData {
   contractSymbol: string;
@@ -17,6 +18,8 @@ export interface OptionData {
   annualizedReturn: number;
   breakeven: number;
   daysToExpiry: number;
+  isITM: boolean;
+  moneyness: 'ITM' | 'OTM' | 'ATM';
   delta?: number;
   theta?: number;
   gamma?: number;
@@ -40,6 +43,7 @@ export interface OptionsTableProps {
   className?: string;
   showGreeks?: boolean;
   showAdvancedMetrics?: boolean;
+  optionType?: 'calls' | 'puts';
 }
 
 const OptionsTable: React.FC<OptionsTableProps> = ({
@@ -50,6 +54,7 @@ const OptionsTable: React.FC<OptionsTableProps> = ({
   className,
   showGreeks = false,
   showAdvancedMetrics = false,
+  optionType = 'calls',
 }) => {
   const [sortConfig, setSortConfig] = useState<SortConfig>({
     key: null,
@@ -205,6 +210,9 @@ const OptionsTable: React.FC<OptionsTableProps> = ({
                   {getSortIcon('strike')}
                 </div>
               </th>
+              <th className="text-left py-3 px-4 font-semibold text-foreground text-sm">
+                <span>Moneyness</span>
+              </th>
               <th
                 className={`text-left py-3 px-4 font-semibold text-foreground text-sm ${getSortClass('optionPrice')}`}
                 onClick={() => handleSort('optionPrice')}
@@ -256,6 +264,7 @@ const OptionsTable: React.FC<OptionsTableProps> = ({
               >
                 <div className="flex items-center space-x-1">
                   <span>Net Profit</span>
+                  <CalculationTooltip metric="netProfit" optionType={optionType} />
                   {getSortIcon('netProfit')}
                 </div>
               </th>
@@ -265,6 +274,7 @@ const OptionsTable: React.FC<OptionsTableProps> = ({
               >
                 <div className="flex items-center space-x-1">
                   <span>Annual Return</span>
+                  <CalculationTooltip metric="annualizedReturn" optionType={optionType} />
                   {getSortIcon('annualizedReturn')}
                 </div>
               </th>
@@ -274,7 +284,18 @@ const OptionsTable: React.FC<OptionsTableProps> = ({
               >
                 <div className="flex items-center space-x-1">
                   <span>Breakeven</span>
+                  <CalculationTooltip metric="breakeven" optionType={optionType} />
                   {getSortIcon('breakeven')}
+                </div>
+              </th>
+              <th
+                className={`text-left py-3 px-4 font-semibold text-foreground text-sm ${getSortClass('maxProfit')}`}
+                onClick={() => handleSort('maxProfit')}
+              >
+                <div className="flex items-center space-x-1">
+                  <span>Max Profit</span>
+                  <CalculationTooltip metric="maxProfit" optionType={optionType} />
+                  {getSortIcon('maxProfit')}
                 </div>
               </th>
               <th
@@ -328,30 +349,6 @@ const OptionsTable: React.FC<OptionsTableProps> = ({
                   </th>
                 </>
               )}
-
-              {/* Advanced metrics columns */}
-              {showAdvancedMetrics && (
-                <>
-                  <th
-                    className={`text-left py-3 px-4 font-semibold text-foreground text-sm ${getSortClass('maxProfit')}`}
-                    onClick={() => handleSort('maxProfit')}
-                  >
-                    <div className="flex items-center space-x-1">
-                      <span>Max Profit</span>
-                      {getSortIcon('maxProfit')}
-                    </div>
-                  </th>
-                  <th
-                    className={`text-left py-3 px-4 font-semibold text-foreground text-sm ${getSortClass('probabilityOfProfit')}`}
-                    onClick={() => handleSort('probabilityOfProfit')}
-                  >
-                    <div className="flex items-center space-x-1">
-                      <span>Prob. Profit</span>
-                      {getSortIcon('probabilityOfProfit')}
-                    </div>
-                  </th>
-                </>
-              )}
             </tr>
           </thead>
           <tbody>
@@ -365,6 +362,19 @@ const OptionsTable: React.FC<OptionsTableProps> = ({
                 </td>
                 <td className="py-3 px-4 font-semibold text-foreground text-sm">
                   {formatCurrency(option.strike)}
+                </td>
+                <td className="py-3 px-4 text-sm">
+                  <span
+                    className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                      option.moneyness === 'ITM'
+                        ? 'bg-green-200 text-green-900'
+                        : option.moneyness === 'OTM'
+                          ? 'bg-gray-200 text-gray-900'
+                          : 'bg-yellow-200 text-yellow-900'
+                    }`}
+                  >
+                    {option.moneyness}
+                  </span>
                 </td>
                 <td className="py-3 px-4 font-semibold text-green-600 text-sm">
                   {formatCurrency(option.optionPrice)}
@@ -396,6 +406,9 @@ const OptionsTable: React.FC<OptionsTableProps> = ({
                 <td className="py-3 px-4 font-semibold text-blue-600 text-sm">
                   {formatCurrency(option.breakeven)}
                 </td>
+                <td className={`py-3 px-4 text-sm ${getValueClass(option.maxProfit || 0)}`}>
+                  {option.maxProfit ? formatCurrency(option.maxProfit) : '—'}
+                </td>
                 <td className="py-3 px-4 text-foreground text-sm">{option.daysToExpiry}</td>
 
                 {/* Greeks data */}
@@ -412,20 +425,6 @@ const OptionsTable: React.FC<OptionsTableProps> = ({
                     </td>
                     <td className="py-3 px-4 text-foreground text-sm font-mono">
                       {option.vega?.toFixed(4) || '—'}
-                    </td>
-                  </>
-                )}
-
-                {/* Advanced metrics data */}
-                {showAdvancedMetrics && (
-                  <>
-                    <td className={`py-3 px-4 text-sm ${getValueClass(option.maxProfit || 0)}`}>
-                      {option.maxProfit ? formatCurrency(option.maxProfit) : '—'}
-                    </td>
-                    <td className="py-3 px-4 text-foreground text-sm">
-                      {option.probabilityOfProfit
-                        ? `${option.probabilityOfProfit.toFixed(1)}%`
-                        : '—'}
                     </td>
                   </>
                 )}

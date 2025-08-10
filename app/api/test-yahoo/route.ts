@@ -6,16 +6,11 @@ export async function GET(request: NextRequest) {
   const symbol = searchParams.get('symbol') || 'AAPL';
 
   try {
-    console.log(`🧪 Testing Yahoo Finance API with symbol: ${symbol}`);
-
     // Test basic quote first
     const quote = await yahooFinanceService.getQuote(symbol);
-    console.log('✅ Quote test successful:', quote);
 
     // Test options chain
     const optionsChain = await yahooFinanceService.getOptionsChain(symbol);
-    console.log('✅ Options chain test successful');
-    console.log(`📊 Found ${optionsChain.options.length} expiration dates`);
 
     return NextResponse.json({
       success: true,
@@ -31,7 +26,6 @@ export async function GET(request: NextRequest) {
         : null,
     });
   } catch (error) {
-    console.error('❌ Yahoo Finance test failed:', error);
     return NextResponse.json(
       {
         success: false,

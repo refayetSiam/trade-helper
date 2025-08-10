@@ -118,7 +118,10 @@ class PolygonService {
   }
 
   // Convert time range to appropriate multiplier and timespan for Polygon
-  private getPolygonParams(range: TimeRange): {
+  private getPolygonParams(
+    range: TimeRange,
+    customInterval?: string | null
+  ): {
     multiplier: number;
     timespan: string;
     from: string;
@@ -126,8 +129,6 @@ class PolygonService {
   } {
     const now = new Date();
     const toDate = now.toISOString().split('T')[0]; // YYYY-MM-DD format
-
-    console.log(`📅 Using current system date: ${now.toISOString()}`);
 
     let fromDate: Date;
     let multiplier: number;
@@ -141,8 +142,13 @@ class PolygonService {
         break;
       case '5D':
         fromDate = new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000);
-        multiplier = 1;
-        timespan = 'day';
+        if (customInterval === '1h') {
+          multiplier = 1;
+          timespan = 'hour';
+        } else {
+          multiplier = 1;
+          timespan = 'day';
+        }
         break;
       case '1M':
         fromDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -268,25 +274,21 @@ class PolygonService {
   async getStockAggregates(
     symbol: string,
     range: TimeRange,
-    priority: 'high' | 'low' = 'high'
+    priority: 'high' | 'low' = 'high',
+    customInterval?: string | null
   ): Promise<{ data: ChartDataPoint[]; freshness: DataFreshnessInfo }> {
-    const cacheKey = `aggregates_${symbol}_${range}`;
+    const cacheKey = `aggregates_${symbol}_${range}_${customInterval || 'default'}`;
 
     // Check cache first
     const cached = this.getCachedData<{ data: ChartDataPoint[]; freshness: DataFreshnessInfo }>(
       cacheKey
     );
     if (cached) {
-      console.log(`📋 Cache hit for ${symbol} ${range}`);
       return cached;
     }
 
     // Get Polygon parameters
-    const { multiplier, timespan, from, to } = this.getPolygonParams(range);
-
-    console.log(
-      `📡 Fetching ${symbol} aggregates: ${multiplier} ${timespan} from ${from} to ${to}`
-    );
+    const { multiplier, timespan, from, to } = this.getPolygonParams(range, customInterval);
 
     // Make rate-limited request
     const data = await polygonRateLimiter.makeRequest(async () => {
@@ -300,7 +302,6 @@ class PolygonService {
         );
         return response;
       } catch (error) {
-        console.error('Polygon API error:', error);
         throw error;
       }
     }, priority);
@@ -313,11 +314,7 @@ class PolygonService {
 
     // Log freshness information
     if (freshness.isStale) {
-      console.warn(`⚠️  Stale data detected for ${symbol}: ${freshness.warningMessage}`);
     } else {
-      console.log(
-        `✅ Fresh data for ${symbol}: last updated ${freshness.daysBehind} day${freshness.daysBehind === 1 ? '' : 's'} ago`
-      );
     }
 
     const result = { data: chartData, freshness };
@@ -326,7 +323,6 @@ class PolygonService {
     const cacheExpiry = this.getCacheExpiry(range);
     this.setCachedData(cacheKey, result, cacheExpiry);
 
-    console.log(`✅ Fetched ${chartData.length} data points for ${symbol} ${range}`);
     return result;
   }
 
@@ -369,14 +365,9 @@ class PolygonService {
     if (!forceRefresh) {
       const cached = this.getCachedData<PolygonOptionsContract[]>(cacheKey);
       if (cached) {
-        console.log(`📋 Cache hit for ${symbol} options contracts`);
         return cached;
       }
     }
-
-    console.log(
-      `📡 Fetching options contracts for ${symbol}${forceRefresh ? ' (force refresh)' : ''}`
-    );
 
     // Make rate-limited request
     const data = await polygonRateLimiter.makeRequest(async () => {
@@ -385,7 +376,6 @@ class PolygonService {
 
         return response;
       } catch (error) {
-        console.error('Polygon options API error:', error);
         throw error;
       }
     }, priority);
@@ -395,7 +385,6 @@ class PolygonService {
     // Cache until manual refresh (1 hour as safety)
     this.setCachedData(cacheKey, contracts, 60 * 60 * 1000);
 
-    console.log(`✅ Fetched ${contracts.length} options contracts for ${symbol}`);
     return contracts;
   }
 
@@ -418,7 +407,6 @@ class PolygonService {
         const response = await polygonClient.getLastStocksQuote(symbol);
         return response;
       } catch (error) {
-        console.error('Polygon quote API error:', error);
         throw error;
       }
     }, priority);
@@ -450,7 +438,6 @@ class PolygonService {
         const response = await polygonClient.getMarketStatus();
         return response;
       } catch (error) {
-        console.error('Polygon market status API error:', error);
         throw error;
       }
     }, 'low');
@@ -469,7 +456,6 @@ class PolygonService {
   // Clear all cache
   clearCache() {
     this.cache.clear();
-    console.log('🧹 Polygon cache cleared');
   }
 
   // Get complete options chain for covered calls
@@ -478,10 +464,6 @@ class PolygonService {
     forceRefresh: boolean = false,
     priority: 'high' | 'low' = 'high'
   ): Promise<TransformedOptionsData> {
-    console.log(
-      `📊 Fetching complete options chain for ${symbol}${forceRefresh ? ' (force refresh)' : ''}`
-    );
-
     // Get both the stock quote and options contracts
     const [quote, contracts] = await Promise.all([
       this.getLastQuote(symbol, priority),
@@ -563,7 +545,6 @@ class PolygonService {
       options,
     };
 
-    console.log(`✅ Processed options chain for ${symbol}: ${options.length} expiration dates`);
     return result;
   }
 

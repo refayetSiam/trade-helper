@@ -226,7 +226,7 @@ const PatternDefinitions: React.FC<PatternDefinitionsProps> = ({ isOpen, onClose
           </div>
 
           <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <h3 className="font-semibold text-blue-900 mb-2">Our Pattern Detection Algorithm</h3>
+            <h3 className="font-semibold text-blue-900 mb-2">Pattern Detection Algorithm</h3>
             <div className="text-sm text-blue-800 space-y-2">
               <p>
                 <strong>Step 1:</strong> Analyzes candlestick relationships (open, high, low, close)

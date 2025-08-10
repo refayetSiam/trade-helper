@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { dataProvider } from '@/lib/services/data-provider';
+import { yahooFinanceService } from '@/lib/services/yahoo-finance';
 import { TimeRange } from '@/lib/services/chart-data';
 
 export async function GET(request: NextRequest) {
@@ -13,29 +13,14 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Fetch from data provider (handles source selection and fallback)
-    const result = await dataProvider.getChartData(symbol.toUpperCase(), range, interval);
-
-    if (result.data.length === 0) {
-      return NextResponse.json(
-        {
-          error: 'No data available',
-          symbol,
-          range,
-        },
-        { status: 404 }
-      );
-    }
+    const chartData = await yahooFinanceService.getHistoricalData(symbol, range, interval);
 
     return NextResponse.json({
-      data: result.data,
-      freshness: {
-        ...result.freshness,
-        lastDataDate: result.freshness.lastDataDate,
-        expectedDataDate: result.freshness.expectedDataDate,
-      },
-      source: result.source,
-      sourceLabel: result.sourceLabel,
+      symbol,
+      range,
+      interval,
+      chartData,
+      dataPoints: chartData.length,
     });
   } catch (error) {
     return NextResponse.json(
@@ -43,6 +28,7 @@ export async function GET(request: NextRequest) {
         error: error instanceof Error ? error.message : 'Unknown error occurred',
         symbol,
         range,
+        interval,
       },
       { status: 500 }
     );

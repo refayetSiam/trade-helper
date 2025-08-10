@@ -17,18 +17,11 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    console.log(
-      `🔍 API: Fetching options chain for ${symbol}${forceRefresh ? ' (force refresh)' : ''}${maxExpirations ? ` (max ${maxExpirations} expirations)` : ''}`
-    );
-
     const result = await dataProvider.getOptionsChain(
       symbol.toUpperCase(),
       forceRefresh,
       maxExpirations ? parseInt(maxExpirations) : undefined
     );
-
-    console.log(`✅ API: Successfully fetched options for ${symbol} from ${result.sourceLabel}`);
-    console.log(`📊 API: ${result.options.length} expiration dates found`);
 
     return NextResponse.json({
       ...result,
@@ -36,8 +29,6 @@ export async function GET(request: NextRequest) {
       sourceLabel: result.sourceLabel,
     });
   } catch (error) {
-    console.error(`❌ API: Error fetching options for ${symbol}:`, error);
-
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : 'Unknown error occurred',

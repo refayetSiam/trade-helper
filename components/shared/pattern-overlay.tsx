@@ -77,7 +77,6 @@ const PatternOverlayComponent: React.FC<PatternOverlayComponentProps> = ({
       isNaN(overlay.startX) ||
       isNaN(overlay.startY)
     ) {
-      console.warn('Invalid overlay values:', overlay);
       return null;
     }
 
@@ -90,7 +89,6 @@ const PatternOverlayComponent: React.FC<PatternOverlayComponentProps> = ({
 
         // Additional validation after scaling
         if (isNaN(x1) || isNaN(y1) || isNaN(x2) || isNaN(y2)) {
-          console.warn('NaN values after scaling:', { x1, y1, x2, y2, overlay });
           return null;
         }
 
@@ -142,7 +140,6 @@ const PatternOverlayComponent: React.FC<PatternOverlayComponentProps> = ({
 
         // Validate line coordinates
         if (isNaN(lineX1) || isNaN(lineY1) || isNaN(lineX2) || isNaN(lineY2)) {
-          console.warn('NaN values in line overlay:', { lineX1, lineY1, lineX2, lineY2, overlay });
           return null;
         }
 
@@ -230,7 +227,6 @@ const PatternOverlayComponent: React.FC<PatternOverlayComponentProps> = ({
 
         // Validate icon coordinates
         if (isNaN(iconX) || isNaN(iconY)) {
-          console.warn('NaN values in icon overlay:', { iconX, iconY, overlay });
           return null;
         }
 
@@ -332,13 +328,6 @@ const PatternOverlayComponent: React.FC<PatternOverlayComponentProps> = ({
 
         // Validate arrow coordinates
         if (isNaN(arrowX) || isNaN(arrowY) || isNaN(arrowEndX) || isNaN(arrowEndY)) {
-          console.warn('NaN values in arrow overlay:', {
-            arrowX,
-            arrowY,
-            arrowEndX,
-            arrowEndY,
-            overlay,
-          });
           return null;
         }
 

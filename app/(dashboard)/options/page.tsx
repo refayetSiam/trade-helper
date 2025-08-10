@@ -2,7 +2,16 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Search, TrendingUp, Download, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
+import {
+  Search,
+  TrendingUp,
+  Download,
+  AlertCircle,
+  Loader2,
+  RefreshCw,
+  Shield,
+} from 'lucide-react';
+import { showDismissibleToast } from '@/components/ui/dismissible-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,6 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import OptionsTable, { OptionData, SortConfig } from '@/components/shared/options-table';
 import FilterPanel, { FilterValues, ValidationErrors } from '@/components/shared/filter-panel';
 import Pagination from '@/components/shared/pagination';
+import StockPriceHeader from '@/components/shared/stock-price-header';
 import toast from 'react-hot-toast';
 import { OptionsChainData, OptionContract } from '@/lib/services/yahoo-finance';
 import {
@@ -19,6 +29,7 @@ import {
   BlackScholesInputs,
 } from '@/lib/services/greeks-calculator';
 import { dataProvider } from '@/lib/services/data-provider';
+import { priceService } from '@/lib/services/price-service';
 import {
   useTradingStore,
   useCurrentSymbol,
@@ -29,9 +40,10 @@ import {
   useSetLocRate,
 } from '@/lib/stores/trading-store';
 
-interface CoveredCallData extends OptionData {
+interface OptionsData extends OptionData {
   id: string;
   symbol: string;
+  optionType: 'call' | 'put';
 }
 
 interface RecommendationAlgorithm {
@@ -75,6 +87,22 @@ const CoveredCallsPage: React.FC = () => {
   const tradingStore = useTradingStore();
   const filters = useCoveredCallsFilters();
   const setFilters = useSetCoveredCallsFilters();
+
+  // Create a wrapper function that properly updates filters
+  const handleFiltersChange = useCallback(
+    (newFilters: FilterValues | ((prev: FilterValues) => FilterValues)) => {
+      if (typeof newFilters === 'function') {
+        // Handle function-based updates
+        const currentFilters = filters;
+        const updatedFilters = newFilters(currentFilters);
+        setFilters(updatedFilters);
+      } else {
+        // Handle direct object updates
+        setFilters(newFilters);
+      }
+    },
+    [setFilters, filters]
+  );
   const locRate = useLocRate();
   const setLocRate = useSetLocRate();
 
@@ -82,13 +110,17 @@ const CoveredCallsPage: React.FC = () => {
   const ticker = currentSymbol || '';
 
   // Local UI state
+  const [optionType, setOptionType] = useState<'calls' | 'puts'>('calls');
   const [activeTab, setActiveTab] = useState<'all' | 'recommendations'>('all');
   const [selectedAlgorithm, setSelectedAlgorithm] = useState('high_profit');
 
   // Data state
-  const [optionsData, setOptionsData] = useState<CoveredCallData[]>([]);
-  const [recommendations, setRecommendations] = useState<CoveredCallData[]>([]);
+  const [callsData, setCallsData] = useState<OptionsData[]>([]);
+  const [putsData, setPutsData] = useState<OptionsData[]>([]);
+  const [recommendations, setRecommendations] = useState<OptionsData[]>([]);
   const [stockPrice, setStockPrice] = useState<number | undefined>();
+  const [priceChange, setPriceChange] = useState<number | null>(null);
+  const [priceChangePercent, setPriceChangePercent] = useState<number | null>(null);
 
   const [validationErrors, setValidationErrors] = useState<ValidationErrors>({});
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: null, direction: 'asc' });
@@ -115,11 +147,8 @@ const CoveredCallsPage: React.FC = () => {
       const cachedData = tradingStore.getCacheData('options', ticker);
       if (cachedData && tradingStore.isCacheValid('options', ticker, 10 * 60 * 1000)) {
         // 10 minutes for options
-        console.log('Using cached options data for', ticker);
         return cachedData.data;
       }
-
-      console.log(`📡 Fetching fresh options via API for: ${ticker}`);
 
       try {
         const refreshParam = Math.random() > 0.5 ? '&refresh=true' : ''; // Force refresh sometimes
@@ -139,19 +168,14 @@ const CoveredCallsPage: React.FC = () => {
         }
 
         const data = await response.json();
-        console.log('✅ Options data received via Polygon API:', data);
 
         // Cache the new data
         if (data) {
           tradingStore.setCacheData('options', ticker, data);
         }
 
-        toast.dismiss(); // Dismiss loading toast
         return data;
       } catch (error) {
-        console.error('❌ Polygon API fetch error:', error);
-        toast.dismiss(); // Dismiss loading toast
-
         // Check if it's a network error
         if (error instanceof TypeError && error.message === 'Failed to fetch') {
           throw new Error(
@@ -162,26 +186,79 @@ const CoveredCallsPage: React.FC = () => {
         throw error;
       }
     },
-    enabled: !!ticker && ticker.trim() !== '',
+    enabled: false, // Disabled automatic fetching - only manual via handleAnalyze()
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: 1, // Reduce retries for faster feedback
   });
 
+  // Put option calculations (cash-secured puts)
+  const calculatePutMetrics = useCallback(
+    (
+      stockPrice: number,
+      strikePrice: number,
+      optionPrice: number,
+      daysToExpiry: number,
+      locRate: number
+    ) => {
+      // Cash-secured put calculations
+      const B_CSP = strikePrice * 100; // cash secured/borrowed capital
+      const interest_CSP = B_CSP * (locRate / 100) * (daysToExpiry / 365);
+
+      // Determine if put is currently ITM or OTM
+      const isPutITM = stockPrice < strikePrice; // Put is ITM when stock price < strike
+
+      // OTM baseline (guaranteed) - not assigned, expires worthless
+      const min_profit_CSP = optionPrice * 100 - interest_CSP;
+
+      // ITM scenario - if assigned (use current stock price as ST for calculation)
+      const net_if_assigned_CSP =
+        (stockPrice - strikePrice) * 100 + optionPrice * 100 - interest_CSP;
+
+      // Choose appropriate scenario based on current moneyness
+      const netProfit = isPutITM ? net_if_assigned_CSP : min_profit_CSP;
+      const maxProfit = min_profit_CSP; // OTM is always the max profit scenario for puts
+
+      // Breakeven (based on chosen scenario)
+      const breakeven = isPutITM
+        ? strikePrice - optionPrice + interest_CSP / 100 // ITM: assigned breakeven
+        : strikePrice - optionPrice; // OTM: simple premium breakeven
+
+      // Annualized return: Based on chosen scenario
+      const annualizedReturn = (netProfit / B_CSP) * (365 / daysToExpiry) * 100;
+
+      // Max loss: If stock goes to 0 and assigned
+      const maxLoss = strikePrice * 100 - optionPrice * 100 - interest_CSP;
+
+      // Probability of profit: Rough estimate (stock stays above breakeven)
+      const distanceFromBreakeven = (stockPrice - breakeven) / stockPrice;
+      const probabilityOfProfit = Math.min(Math.max(50 + distanceFromBreakeven * 30, 10), 90);
+
+      return {
+        costOfBorrowing: interest_CSP,
+        maxProfit,
+        breakeven,
+        netProfit,
+        annualizedReturn,
+        maxLoss,
+        probabilityOfProfit,
+        daysToExpiry,
+      };
+    },
+    []
+  );
+
   const processOptionsData = useCallback(
     async (chainData: OptionsChainData) => {
       try {
-        console.log('🔧 Starting to process options data...');
-        console.log(`📈 Stock price: $${chainData.quote.regularMarketPrice}`);
-        console.log(`📅 Expiration dates: ${chainData.options.length}`);
-
-        const allOptions: CoveredCallData[] = [];
+        const allCalls: OptionsData[] = [];
+        const allPuts: OptionsData[] = [];
         const riskFreeRate = greeksCalculatorService.getRiskFreeRate();
-        console.log(`📊 Risk-free rate: ${riskFreeRate * 100}%`);
 
         for (const expiry of chainData.options) {
           const expirationDate = new Date(expiry.expirationDate * 1000);
           const timeToExpiry = greeksCalculatorService.calculateTimeToExpiry(expirationDate);
 
+          // Process calls
           for (const call of expiry.calls) {
             try {
               // Use bid/ask midpoint for more accurate pricing
@@ -204,9 +281,6 @@ const CoveredCallsPage: React.FC = () => {
               // Additional safety check for IV
               if (!isFinite(impliedVol) || impliedVol > 5) {
                 impliedVol = 0.3; // Default to 30% if calculation fails
-                console.warn(
-                  `IV calculation produced extreme value for ${call.contractSymbol}, using default 30%`
-                );
               }
 
               // Prepare inputs for analysis
@@ -229,9 +303,19 @@ const CoveredCallsPage: React.FC = () => {
                 optionPrice
               );
 
-              const optionData: CoveredCallData = {
+              // Determine if call is ITM/OTM
+              const isCallITM = chainData.quote.regularMarketPrice > call.strike;
+              const callMoneyness: 'ITM' | 'OTM' | 'ATM' =
+                chainData.quote.regularMarketPrice > call.strike
+                  ? 'ITM'
+                  : chainData.quote.regularMarketPrice < call.strike
+                    ? 'OTM'
+                    : 'ATM';
+
+              const callData: OptionsData = {
                 id: call.contractSymbol,
                 symbol: chainData.quote.symbol,
+                optionType: 'call',
                 contractSymbol: call.contractSymbol,
                 expiry: expirationDate.toLocaleDateString(),
                 strike: call.strike,
@@ -239,6 +323,8 @@ const CoveredCallsPage: React.FC = () => {
                 volume: call.volume || 0,
                 openInterest: call.openInterest || 0,
                 impliedVolatility: impliedVol,
+                isITM: isCallITM,
+                moneyness: callMoneyness,
                 costOfBorrowing: analysis.costOfBorrowing,
                 netProfit: analysis.netProfit,
                 annualizedReturn: analysis.annualizedReturn,
@@ -254,39 +340,165 @@ const CoveredCallsPage: React.FC = () => {
                 probabilityOfProfit: analysis.probabilityOfProfit,
               };
 
-              allOptions.push(optionData);
+              allCalls.push(callData);
             } catch (error) {
-              console.warn(`Error processing option ${call.contractSymbol}:`, error);
+              // Silently skip options that fail to process
+            }
+          }
+
+          // Process puts
+          for (const put of expiry.puts) {
+            try {
+              // Use bid/ask midpoint for more accurate pricing
+              let optionPrice = put.lastPrice;
+              if (put.bid && put.ask && put.bid > 0 && put.ask > 0) {
+                optionPrice = (put.bid + put.ask) / 2;
+              }
+
+              // Calculate implied volatility from market price
+              let impliedVol = greeksCalculatorService.calculateImpliedVolatility(
+                optionPrice,
+                chainData.quote.regularMarketPrice,
+                put.strike,
+                timeToExpiry,
+                riskFreeRate,
+                'put'
+              );
+
+              // Additional safety check for IV
+              if (!isFinite(impliedVol) || impliedVol > 5) {
+                impliedVol = 0.3; // Default to 30% if calculation fails
+              }
+
+              // Prepare inputs for Greeks calculation
+              const inputs: BlackScholesInputs = {
+                stockPrice: chainData.quote.regularMarketPrice,
+                strikePrice: put.strike,
+                timeToExpiry,
+                riskFreeRate,
+                volatility: impliedVol,
+                dividendYield: (chainData.quote.dividendYield || 0) / 100,
+              };
+
+              // Calculate Greeks for puts
+              const greeks = greeksCalculatorService.calculateGreeks(inputs, 'put');
+
+              // Calculate put-specific metrics using cash-secured put strategy
+              const putMetrics = calculatePutMetrics(
+                chainData.quote.regularMarketPrice,
+                put.strike,
+                optionPrice,
+                greeksCalculatorService.calculateTimeToExpiry(expirationDate) * 365,
+                locRate
+              );
+
+              // Determine if put is ITM/OTM
+              const isPutITM = chainData.quote.regularMarketPrice < put.strike;
+              const putMoneyness: 'ITM' | 'OTM' | 'ATM' =
+                chainData.quote.regularMarketPrice < put.strike
+                  ? 'ITM'
+                  : chainData.quote.regularMarketPrice > put.strike
+                    ? 'OTM'
+                    : 'ATM';
+
+              const putData: OptionsData = {
+                id: put.contractSymbol,
+                symbol: chainData.quote.symbol,
+                optionType: 'put',
+                contractSymbol: put.contractSymbol,
+                expiry: expirationDate.toLocaleDateString(),
+                strike: put.strike,
+                optionPrice: optionPrice,
+                volume: put.volume || 0,
+                openInterest: put.openInterest || 0,
+                impliedVolatility: impliedVol,
+                isITM: isPutITM,
+                moneyness: putMoneyness,
+                costOfBorrowing: putMetrics.costOfBorrowing,
+                netProfit: putMetrics.netProfit,
+                annualizedReturn: putMetrics.annualizedReturn,
+                breakeven: putMetrics.breakeven,
+                daysToExpiry: putMetrics.daysToExpiry,
+                delta: greeks.delta,
+                theta: greeks.theta,
+                gamma: greeks.gamma,
+                vega: greeks.vega,
+                rho: greeks.rho,
+                maxProfit: putMetrics.maxProfit,
+                maxLoss: putMetrics.maxLoss,
+                probabilityOfProfit: putMetrics.probabilityOfProfit,
+              };
+
+              allPuts.push(putData);
+            } catch (error) {
+              // Silently skip options that fail to process
             }
           }
         }
 
-        setOptionsData(allOptions);
-        toast.success(`✅ Analyzed ${allOptions.length} covered call opportunities`);
+        setCallsData(allCalls);
+        setPutsData(allPuts);
+        showDismissibleToast(
+          `✅ Analyzed ${allCalls.length} calls and ${allPuts.length} puts options`
+        );
       } catch (error) {
-        console.error('Error processing options data:', error);
         toast.error('Failed to analyze options data');
       }
     },
     [locRate]
   );
 
+  // Fetch accurate stock price using the unified price service
+  const fetchAccurateStockPrice = useCallback(async (symbol: string) => {
+    try {
+      const priceData = await priceService.getPrimaryStockPrice(symbol, '5D');
+
+      setStockPrice(priceData.currentPrice);
+      setPriceChange(priceData.priceChange);
+      setPriceChangePercent(priceData.priceChangePercent);
+
+      return priceData.currentPrice;
+    } catch (error) {
+      // Set defaults if fetch fails
+      setStockPrice(undefined);
+      setPriceChange(null);
+      setPriceChangePercent(null);
+      return null;
+    }
+  }, []);
+
   // Process options data when chain data is available
   useEffect(() => {
-    if (optionsChainData) {
-      console.log('📊 Processing options chain data:', optionsChainData);
-      setStockPrice(optionsChainData.quote.regularMarketPrice);
-      processOptionsData(optionsChainData);
+    if (optionsChainData && ticker) {
+      // Fetch accurate stock price using the new price service
+      fetchAccurateStockPrice(ticker).then(async accuratePrice => {
+        if (accuratePrice) {
+          // Process options data with the original quote data (for Greeks calculations)
+          // but display the accurate chart-based price in the header
+          processOptionsData(optionsChainData);
+        } else {
+          // Fallback to the original quote price if price service fails
+          const fallbackPrice = optionsChainData.quote.regularMarketPrice;
+          setStockPrice(fallbackPrice);
+          processOptionsData(optionsChainData);
+        }
+      });
     }
-  }, [optionsChainData, processOptionsData]);
+  }, [optionsChainData, ticker, fetchAccurateStockPrice, processOptionsData]);
 
-  // Auto-load cached options data when ticker changes
-  useEffect(() => {
-    if (ticker && tradingStore.isCacheValid('options', ticker, 10 * 60 * 1000)) {
-      console.log('Auto-loading cached options data for', ticker);
-      refetchChain();
-    }
-  }, [ticker, tradingStore, refetchChain]);
+  // Note: Removed automatic ticker-triggered fetching to prevent errors on partial symbols
+  // Options data is now fetched manually only via handleAnalyze() when user clicks "Analyze Options"
+
+  const handleTickerChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setCurrentSymbol(e.target.value.toUpperCase());
+    },
+    [setCurrentSymbol]
+  );
+
+  const handleAlgorithmChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedAlgorithm(e.target.value);
+  }, []);
 
   const handleAnalyze = () => {
     if (!ticker) {
@@ -300,16 +512,18 @@ const CoveredCallsPage: React.FC = () => {
       return;
     }
 
-    // Common symbols that don't have options
-    const symbolsWithoutOptions = ['AMDF', 'AAMDF'];
+    // Common symbols that don't have options or are invalid
+    const symbolsWithoutOptions = ['AMDF', 'AAMDF', 'TES'];
     if (symbolsWithoutOptions.includes(ticker.toUpperCase())) {
       toast.error(
-        `${ticker.toUpperCase()} does not have options trading available. Try symbols like AAPL, MSFT, TSLA, SPY instead.`
+        `${ticker.toUpperCase()} does not have options trading available or is an invalid symbol. Try symbols like AAPL, MSFT, TSLA, SPY instead.`
       );
       return;
     }
 
-    // The query will automatically run when ticker changes
+    // Manually trigger the options data fetch
+    refetchChain();
+    toast.loading(`Analyzing options for ${ticker.toUpperCase()}...`);
   };
 
   const handleRefreshOptions = async () => {
@@ -323,18 +537,22 @@ const CoveredCallsPage: React.FC = () => {
     const newSource = currentConfig.primarySource === 'source1' ? 'source2' : 'source1';
     dataProvider.setDataSource(newSource);
 
-    toast.loading(
+    const loadingToastId = toast.loading(
       `Refreshing options using ${newSource === 'source1' ? 'Source 1' : 'Fallback API'}...`
     );
 
     try {
       await refetchChain();
-      toast.dismiss();
+      toast.dismiss(loadingToastId);
       toast.success(
-        `Options refreshed using ${newSource === 'source1' ? 'Source 1' : 'Fallback API'}`
+        `Options refreshed using ${newSource === 'source1' ? 'Source 1' : 'Fallback API'}`,
+        {
+          duration: 4000, // 4 seconds
+          position: 'top-right',
+        }
       );
     } catch (error) {
-      toast.dismiss();
+      toast.dismiss(loadingToastId);
       toast.error('Failed to refresh options');
     } finally {
       // Optionally switch back to original source
@@ -344,12 +562,13 @@ const CoveredCallsPage: React.FC = () => {
 
   // Generate recommendations based on selected algorithm
   const generateRecommendations = () => {
-    if (optionsData.length === 0) {
-      toast.error('No options data available for recommendations');
+    const currentOptionsData = optionType === 'calls' ? callsData : putsData;
+    if (currentOptionsData.length === 0) {
+      toast.error(`No ${optionType} data available for recommendations`);
       return;
     }
 
-    let filtered = [...optionsData];
+    let filtered = [...currentOptionsData];
 
     // Apply basic filters for recommendations
     filtered = filtered.filter(
@@ -398,14 +617,15 @@ const CoveredCallsPage: React.FC = () => {
     }
 
     setRecommendations(filtered);
-    toast.success(
+    showDismissibleToast(
       `✅ Generated ${filtered.length} recommendations using ${ALGORITHMS.find(a => a.id === selectedAlgorithm)?.name} algorithm`
     );
   };
 
   // Apply client-side filtering
   const filteredData = useMemo(() => {
-    const sourceData = activeTab === 'all' ? optionsData : recommendations;
+    const currentOptionsData = optionType === 'calls' ? callsData : putsData;
+    const sourceData = activeTab === 'all' ? currentOptionsData : recommendations;
     let filtered = [...sourceData];
 
     // Apply filters
@@ -445,12 +665,6 @@ const CoveredCallsPage: React.FC = () => {
     if (filters.returnMax) {
       filtered = filtered.filter(opt => opt.annualizedReturn <= parseFloat(filters.returnMax));
     }
-    if (filters.profitability === 'profitable') {
-      filtered = filtered.filter(opt => opt.netProfit > 0);
-    }
-    if (filters.profitability === 'unprofitable') {
-      filtered = filtered.filter(opt => opt.netProfit <= 0);
-    }
 
     // Apply sorting
     if (sortConfig.key) {
@@ -473,7 +687,7 @@ const CoveredCallsPage: React.FC = () => {
     }
 
     return filtered;
-  }, [optionsData, recommendations, filters, sortConfig, activeTab]);
+  }, [callsData, putsData, optionType, recommendations, filters, sortConfig, activeTab]);
 
   // Calculate pagination
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
@@ -548,7 +762,10 @@ const CoveredCallsPage: React.FC = () => {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    toast.success('✅ CSV exported successfully');
+    toast.success('✅ CSV exported successfully', {
+      duration: 3000, // CSV export can auto-dismiss after 3 seconds
+      position: 'top-right',
+    });
   };
 
   const formatCurrency = (amount: number): string => {
@@ -560,24 +777,15 @@ const CoveredCallsPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
-            <TrendingUp className="h-8 w-8 text-blue-600" />
-            Covered Call Analyzer
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Advanced options analysis with LOC-based covered call strategies
-          </p>
-        </div>
-        {stockPrice && (
-          <div className="text-right">
-            <div className="text-2xl font-bold text-foreground">{ticker.toUpperCase()}</div>
-            <div className="text-lg font-semibold text-blue-600">{formatCurrency(stockPrice)}</div>
-          </div>
-        )}
-      </div>
+      {/* Stock Price Display */}
+      {stockPrice && (
+        <StockPriceHeader
+          symbol={ticker}
+          currentPrice={stockPrice}
+          priceChange={priceChange}
+          priceChangePercent={priceChangePercent}
+        />
+      )}
 
       {/* Input Section */}
       <Card>
@@ -596,7 +804,7 @@ const CoveredCallsPage: React.FC = () => {
                 <Input
                   type="text"
                   value={ticker}
-                  onChange={e => setCurrentSymbol(e.target.value.toUpperCase())}
+                  onChange={handleTickerChange}
                   placeholder="Enter ticker (e.g., AAPL)"
                   className="pl-10 text-lg font-semibold"
                   onKeyPress={e => e.key === 'Enter' && handleAnalyze()}
@@ -619,7 +827,7 @@ const CoveredCallsPage: React.FC = () => {
                 Analyze Options
               </Button>
 
-              {optionsData.length > 0 && (
+              {(callsData.length > 0 || putsData.length > 0) && (
                 <Button
                   onClick={handleRefreshOptions}
                   disabled={isLoadingChain}
@@ -656,64 +864,83 @@ const CoveredCallsPage: React.FC = () => {
                 <code className="bg-red-100 px-1 py-0.5 rounded">npm run dev</code>
               </p>
             )}
+            {(chainError as Error).message.includes('Access denied') && (
+              <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-yellow-800 text-sm font-medium">API Subscription Issue</p>
+                <p className="text-yellow-700 text-sm mt-1">
+                  Your current API subscription doesn't include options data access. Consider
+                  upgrading your Polygon.io plan or try with a different stock symbol.
+                </p>
+              </div>
+            )}
+            {(chainError as Error).message.includes('options data not available') && (
+              <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-blue-800 text-sm font-medium">No Options Available</p>
+                <p className="text-blue-700 text-sm mt-1">
+                  This stock may not have listed options or the market may be closed. Try popular
+                  symbols like AAPL, MSFT, TSLA, or SPY.
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
 
       {/* Results Section */}
-      {(optionsData.length > 0 || recommendations.length > 0) && (
+      {(callsData.length > 0 || putsData.length > 0 || recommendations.length > 0) && (
         <>
-          {/* Tabs */}
+          {/* Option Type Tabs (Calls/Puts) */}
           <Tabs
-            value={activeTab}
-            onValueChange={value => setActiveTab(value as 'all' | 'recommendations')}
+            value={optionType}
+            onValueChange={value => setOptionType(value as 'calls' | 'puts')}
           >
             <div className="flex items-center justify-between mb-4">
               <TabsList>
-                <TabsTrigger value="all" className="flex items-center gap-2">
-                  All Options ({optionsData.length})
+                <TabsTrigger value="calls" className="flex items-center gap-2">
+                  Calls ({callsData.length})
                 </TabsTrigger>
-                <TabsTrigger value="recommendations" className="flex items-center gap-2">
-                  Recommendations ({recommendations.length})
+                <TabsTrigger value="puts" className="flex items-center gap-2">
+                  Puts ({putsData.length})
                 </TabsTrigger>
               </TabsList>
 
-              <div className="flex items-center gap-2">
-                {activeTab === 'recommendations' && (
-                  <>
-                    <select
-                      value={selectedAlgorithm}
-                      onChange={e => setSelectedAlgorithm(e.target.value)}
-                      className="px-3 py-1 border border-input rounded-lg text-sm bg-background"
-                    >
-                      {ALGORITHMS.map(algo => (
-                        <option key={algo.id} value={algo.id}>
-                          {algo.name}
-                        </option>
-                      ))}
-                    </select>
-                    <Button
-                      onClick={generateRecommendations}
-                      variant="outline"
-                      size="sm"
-                      className="flex items-center gap-1"
-                    >
-                      <TrendingUp className="h-4 w-4" />
-                      Generate
-                    </Button>
-                  </>
-                )}
+              {/* Export CSV button inline with CALLS/PUTS */}
+              <Button
+                onClick={handleExport}
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-1"
+              >
+                <Download className="h-4 w-4" />
+                Export CSV
+              </Button>
+            </div>
+
+            {/* Recommendations action buttons */}
+            {activeTab === 'recommendations' && (
+              <div className="flex items-center justify-end gap-2 mb-4">
+                <select
+                  value={selectedAlgorithm}
+                  onChange={handleAlgorithmChange}
+                  className="px-3 py-1 border border-input rounded-lg text-sm bg-background"
+                >
+                  {ALGORITHMS.map(algo => (
+                    <option key={algo.id} value={algo.id}>
+                      {algo.name}
+                    </option>
+                  ))}
+                </select>
                 <Button
-                  onClick={handleExport}
+                  onClick={generateRecommendations}
                   variant="outline"
                   size="sm"
                   className="flex items-center gap-1"
                 >
-                  <Download className="h-4 w-4" />
-                  Export CSV
+                  <TrendingUp className="h-4 w-4" />
+                  Generate
                 </Button>
               </div>
-            </div>
+            )}
 
             {/* Algorithm Info */}
             {activeTab === 'recommendations' && (
@@ -739,17 +966,27 @@ const CoveredCallsPage: React.FC = () => {
               </Card>
             )}
 
-            <TabsContent value="all" className="space-y-4">
+            {/* Content area - shows different data based on activeTab */}
+            <div className="space-y-4">
               {/* Filter Panel */}
               <FilterPanel
                 filters={filters}
-                onFiltersChange={setFilters}
+                onFiltersChange={handleFiltersChange}
                 validationErrors={validationErrors}
                 onValidationErrors={setValidationErrors}
                 currentPrice={stockPrice}
                 locRate={locRate}
                 onLocRateChange={setLocRate}
-                totalResults={filteredData.length}
+                totalResults={
+                  activeTab === 'all'
+                    ? optionType === 'calls'
+                      ? callsData.length
+                      : putsData.length
+                    : filteredData.length
+                }
+                activeTab={activeTab}
+                onTabChange={setActiveTab}
+                recommendationsCount={recommendations.length}
               />
 
               {/* Options Table */}
@@ -760,6 +997,7 @@ const CoveredCallsPage: React.FC = () => {
                 onSort={setSortConfig}
                 showGreeks={true}
                 showAdvancedMetrics={true}
+                optionType={optionType}
               />
 
               {/* Enhanced Pagination */}
@@ -771,43 +1009,8 @@ const CoveredCallsPage: React.FC = () => {
                 onPageChange={setCurrentPage}
                 onItemsPerPageChange={setItemsPerPage}
               />
-            </TabsContent>
-
-            <TabsContent value="recommendations" className="space-y-4">
-              {recommendations.length > 0 ? (
-                <>
-                  {/* Filter Panel for Recommendations */}
-                  <FilterPanel
-                    filters={filters}
-                    onFiltersChange={setFilters}
-                    validationErrors={validationErrors}
-                    onValidationErrors={setValidationErrors}
-                    currentPrice={stockPrice}
-                    locRate={locRate}
-                    onLocRateChange={setLocRate}
-                    totalResults={filteredData.length}
-                  />
-
-                  {/* Recommendations Table */}
-                  <OptionsTable
-                    data={paginatedData}
-                    currency="USD"
-                    onSort={setSortConfig}
-                    showGreeks={true}
-                    showAdvancedMetrics={true}
-                  />
-
-                  {/* Enhanced Pagination for Recommendations */}
-                  <Pagination
-                    currentPage={currentPage}
-                    totalPages={totalPages}
-                    totalItems={filteredData.length}
-                    itemsPerPage={itemsPerPage}
-                    onPageChange={setCurrentPage}
-                    onItemsPerPageChange={setItemsPerPage}
-                  />
-                </>
-              ) : (
+              {/* Empty recommendations state */}
+              {activeTab === 'recommendations' && recommendations.length === 0 && (
                 <Card>
                   <CardContent className="pt-6 text-center">
                     <div className="text-muted-foreground mb-4">
@@ -829,13 +1032,13 @@ const CoveredCallsPage: React.FC = () => {
                   </CardContent>
                 </Card>
               )}
-            </TabsContent>
+            </div>
           </Tabs>
         </>
       )}
 
       {/* Empty State */}
-      {!isLoadingChain && optionsData.length === 0 && (
+      {!isLoadingChain && callsData.length === 0 && putsData.length === 0 && (
         <Card>
           <CardContent className="pt-6 text-center">
             <div className="text-muted-foreground mb-4">

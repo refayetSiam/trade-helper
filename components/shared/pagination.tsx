@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -33,6 +33,10 @@ const Pagination: React.FC<PaginationProps> = ({
   className,
 }) => {
   const [pageInput, setPageInput] = useState('');
+
+  const handlePageInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setPageInput(e.target.value);
+  }, []);
 
   const startItem = (currentPage - 1) * itemsPerPage + 1;
   const endItem = Math.min(currentPage * itemsPerPage, totalItems);
@@ -124,7 +128,7 @@ const Pagination: React.FC<PaginationProps> = ({
             min="1"
             max={totalPages}
             value={pageInput}
-            onChange={e => setPageInput(e.target.value)}
+            onChange={handlePageInputChange}
             placeholder={currentPage.toString()}
             className="w-16 h-8 text-center"
           />

@@ -1,8 +1,18 @@
 'use client';
 
 import React from 'react';
-import { X, TrendingUp, TrendingDown, Minus, Target, Shield, AlertTriangle } from 'lucide-react';
+import {
+  X,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  Target,
+  Shield,
+  AlertTriangle,
+  Calendar,
+} from 'lucide-react';
 import { DetectedPattern } from '@/lib/services/pattern-detection';
+import { ChartDataPoint } from '@/lib/services/chart-data';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -10,10 +20,30 @@ import { Button } from '@/components/ui/button';
 interface PatternEvidencePanelProps {
   pattern: DetectedPattern | null;
   onClose: () => void;
+  chartData?: ChartDataPoint[];
 }
 
-const PatternEvidencePanel: React.FC<PatternEvidencePanelProps> = ({ pattern, onClose }) => {
+const PatternEvidencePanel: React.FC<PatternEvidencePanelProps> = ({
+  pattern,
+  onClose,
+  chartData,
+}) => {
   if (!pattern) return null;
+
+  const getPatternActivationDate = () => {
+    if (!chartData || !pattern) return null;
+    const dataPoint = chartData[pattern.startIndex];
+    if (!dataPoint?.date) return null;
+
+    const date = new Date(dataPoint.date);
+    return date.toLocaleDateString('en-US', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
+  };
+
+  const activationDate = getPatternActivationDate();
 
   const getSignalIcon = (signal: string) => {
     switch (signal) {
@@ -49,7 +79,7 @@ const PatternEvidencePanel: React.FC<PatternEvidencePanelProps> = ({ pattern, on
   };
 
   return (
-    <Card className="fixed top-4 right-4 w-80 max-h-[90vh] overflow-y-auto z-50 shadow-xl border-2">
+    <Card className="fixed top-4 right-4 w-80 max-h-[90vh] overflow-y-auto z-50 shadow-xl border-2 animate-in fade-in slide-in-from-right-2 duration-300">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -74,6 +104,15 @@ const PatternEvidencePanel: React.FC<PatternEvidencePanelProps> = ({ pattern, on
             <span className="capitalize">{pattern.confidence} Confidence</span>
           </Badge>
         </div>
+
+        {/* Pattern Activation Date */}
+        {activationDate && (
+          <div className="flex items-center gap-2 text-sm bg-muted/30 rounded-lg p-2">
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+            <span className="text-muted-foreground">Pattern activated:</span>
+            <span className="font-semibold">{activationDate}</span>
+          </div>
+        )}
 
         {/* Key Metrics */}
         <div className="grid grid-cols-2 gap-3 text-sm">

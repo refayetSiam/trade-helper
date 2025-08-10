@@ -50,6 +50,34 @@ const PATTERN_DEFINITIONS: PatternInfo[] = [
     type: 'candlestick',
     color: '#f59e0b',
   },
+  {
+    code: 'MS',
+    name: 'Morning Star',
+    description: '3-candle bullish reversal, 70.1% win rate',
+    type: 'candlestick',
+    color: '#10b981',
+  },
+  {
+    code: 'ES',
+    name: 'Evening Star',
+    description: '3-candle bearish reversal, 69.4% win rate',
+    type: 'candlestick',
+    color: '#ef4444',
+  },
+  {
+    code: 'IB',
+    name: 'Inside Bar',
+    description: 'Range contraction, 71.6% win rate with volume',
+    type: 'candlestick',
+    color: '#8b5cf6',
+  },
+  {
+    code: 'MB',
+    name: 'Marubozu',
+    description: 'No-wick candle, strong trend continuation',
+    type: 'candlestick',
+    color: '#06b6d4',
+  },
 
   // Support & Resistance
   {
@@ -126,6 +154,132 @@ const PATTERN_DEFINITIONS: PatternInfo[] = [
     type: 'combinations',
     color: '#10b981',
   },
+  {
+    code: 'RD+',
+    name: 'RSI Bullish Divergence',
+    description: 'Price lower low, RSI higher low - 72.5% win rate',
+    type: 'combinations',
+    color: '#10b981',
+  },
+  {
+    code: 'RD-',
+    name: 'RSI Bearish Divergence',
+    description: 'Price higher high, RSI lower high - 72.5% win rate',
+    type: 'combinations',
+    color: '#ef4444',
+  },
+  {
+    code: 'MA+',
+    name: 'MACD Bullish Acceleration',
+    description: 'Histogram rising 3+ candles - 68.4% win rate',
+    type: 'combinations',
+    color: '#10b981',
+  },
+  {
+    code: 'MA-',
+    name: 'MACD Bearish Acceleration',
+    description: 'Histogram falling 3+ candles - 68.4% win rate',
+    type: 'combinations',
+    color: '#ef4444',
+  },
+  {
+    code: 'SC+',
+    name: 'Stochastic Bullish Cross',
+    description: '%K crosses %D upward in oversold - 65.9% win rate',
+    type: 'combinations',
+    color: '#10b981',
+  },
+  {
+    code: 'SC-',
+    name: 'Stochastic Bearish Cross',
+    description: '%K crosses %D downward in overbought - 65.9% win rate',
+    type: 'combinations',
+    color: '#ef4444',
+  },
+  {
+    code: 'VW+',
+    name: 'VWAP Bullish Reclaim',
+    description: 'Price crosses above VWAP and holds - 70.3% win rate',
+    type: 'combinations',
+    color: '#10b981',
+  },
+  {
+    code: 'VW-',
+    name: 'VWAP Bearish Reject',
+    description: 'Price fails to reclaim or rejects VWAP - 70.3% win rate',
+    type: 'combinations',
+    color: '#ef4444',
+  },
+  {
+    code: 'RS+',
+    name: 'RSI Divergence + Support',
+    description: 'RSI bullish divergence near support - 78.2% win rate',
+    type: 'combinations',
+    color: '#8b5cf6',
+  },
+  {
+    code: 'IBV',
+    name: 'Inside Bar Volume Breakout',
+    description: 'Inside bar with volume surge breakout - 74.5% win rate',
+    type: 'combinations',
+    color: '#06b6d4',
+  },
+  {
+    code: 'CH',
+    name: 'Cup & Handle',
+    description: 'Classic cup and handle pattern - 76.1% win rate',
+    type: 'combinations',
+    color: '#10b981',
+  },
+  {
+    code: 'EP',
+    name: 'EMA Pullback',
+    description: 'EMA 20/50 pullback entry - 72.8% win rate',
+    type: 'combinations',
+    color: '#f59e0b',
+  },
+  {
+    code: 'ORB',
+    name: 'Opening Range Breakout',
+    description: 'Intraday range breakout with volume - 73.6% win rate',
+    type: 'combinations',
+    color: '#06b6d4',
+  },
+  {
+    code: 'VWB',
+    name: 'VWAP Bounce',
+    description: 'Intraday VWAP mean reversion - 70.5% win rate',
+    type: 'combinations',
+    color: '#8b5cf6',
+  },
+  {
+    code: 'LS',
+    name: 'Liquidity Sweep',
+    description: 'False breakout reversal - 68.9% win rate',
+    type: 'combinations',
+    color: '#ef4444',
+  },
+  {
+    code: 'SDB+',
+    name: 'EOD Sharp Drop Bounce',
+    description: 'End-of-day sharp drop with bounce potential - 71.3% win rate',
+    type: 'combinations',
+    color: '#10b981',
+  },
+  {
+    code: 'SDC-',
+    name: 'EOD Sharp Drop Continuation',
+    description: 'End-of-day sharp drop likely to continue - 73.7% win rate',
+    type: 'combinations',
+    color: '#ef4444',
+  },
+  {
+    code: 'SDN',
+    name: 'EOD Sharp Drop Neutral',
+    description: 'End-of-day sharp drop with unclear direction',
+    type: 'combinations',
+    color: '#f59e0b',
+  },
 ];
 
 interface PatternLegendProps {
@@ -168,8 +322,8 @@ const PatternLegend: React.FC<PatternLegendProps> = ({ isOpen, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <Card className="w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-in fade-in duration-300">
+      <Card className="w-full max-w-2xl max-h-[80vh] overflow-y-auto animate-in zoom-in-95 fade-in duration-300 slide-in-from-bottom-2">
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
             <CardTitle className="flex items-center gap-2">

@@ -6,6 +6,63 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 
+// Move RangeInput outside to prevent recreation on every render
+const RangeInput: React.FC<{
+  placeholder: string;
+  value: string;
+  onChange: (value: string) => void;
+  error?: boolean;
+  step?: string;
+  min?: string;
+  max?: string;
+}> = ({ placeholder, value, onChange, error = false, step = '0.01', min, max }) => {
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      onChange(e.target.value);
+    },
+    [onChange]
+  );
+
+  return (
+    <Input
+      type="number"
+      placeholder={placeholder}
+      value={value}
+      onChange={handleChange}
+      className={cn(
+        'w-28 h-8 text-xs text-center bg-background border-input',
+        error && 'border-destructive bg-destructive/10'
+      )}
+      step={step}
+      min={min}
+      max={max}
+      autoComplete="off"
+    />
+  );
+};
+
+// Move QuickButton outside as well to prevent recreation
+const QuickButton: React.FC<{
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+  disabled?: boolean;
+}> = ({ active, onClick, children, disabled = false }) => (
+  <button
+    onClick={onClick}
+    disabled={disabled}
+    className={cn(
+      'text-xs font-semibold px-2 py-1 rounded transition-all duration-200',
+      active
+        ? 'bg-primary text-primary-foreground shadow-md transform-gpu hover:shadow-lg'
+        : 'bg-muted text-muted-foreground hover:bg-muted/80',
+      disabled && 'opacity-50 cursor-not-allowed'
+    )}
+  >
+    {children}
+  </button>
+);
+
 export interface FilterValues {
   timeMin: string;
   timeMax: string;
@@ -15,7 +72,6 @@ export interface FilterValues {
   volumeMax: string;
   oiMin: string;
   oiMax: string;
-  profitability: 'all' | 'profitable' | 'unprofitable';
   ivMin: string;
   ivMax: string;
   returnMin: string;
@@ -48,6 +104,10 @@ export interface FilterPanelProps {
   locRate: number;
   onLocRateChange: (rate: number) => void;
   totalResults: number;
+  // New props for All/Recommendations
+  activeTab?: 'all' | 'recommendations';
+  onTabChange?: (tab: 'all' | 'recommendations') => void;
+  recommendationsCount?: number;
 }
 
 const FilterPanel: React.FC<FilterPanelProps> = ({
@@ -60,6 +120,9 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
   locRate,
   onLocRateChange,
   totalResults,
+  activeTab = 'all',
+  onTabChange,
+  recommendationsCount = 0,
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [activeQuickBtns, setActiveQuickBtns] = useState<QuickButtonState>({
@@ -119,12 +182,72 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
     validateRanges();
   }, [validateRanges]);
 
-  const updateFilter = (key: keyof FilterValues, value: string) => {
-    onFiltersChange({
-      ...filters,
-      [key]: value,
-    });
-  };
+  const updateFilter = useCallback(
+    (key: keyof FilterValues, value: string) => {
+      onFiltersChange((prevFilters: FilterValues) => ({
+        ...prevFilters,
+        [key]: value,
+      }));
+    },
+    [onFiltersChange]
+  );
+
+  const handleLocRateChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      onLocRateChange(parseFloat(e.target.value) || 0);
+    },
+    [onLocRateChange]
+  );
+
+  // Memoized handlers for each input field to prevent re-renders
+  const handleStrikeMinChange = useCallback(
+    (value: string) => updateFilter('strikeMin', value),
+    [updateFilter]
+  );
+  const handleStrikeMaxChange = useCallback(
+    (value: string) => updateFilter('strikeMax', value),
+    [updateFilter]
+  );
+  const handleVolumeMinChange = useCallback(
+    (value: string) => updateFilter('volumeMin', value),
+    [updateFilter]
+  );
+  const handleVolumeMaxChange = useCallback(
+    (value: string) => updateFilter('volumeMax', value),
+    [updateFilter]
+  );
+  const handleTimeMinChange = useCallback(
+    (value: string) => updateFilter('timeMin', value),
+    [updateFilter]
+  );
+  const handleTimeMaxChange = useCallback(
+    (value: string) => updateFilter('timeMax', value),
+    [updateFilter]
+  );
+  const handleOIMinChange = useCallback(
+    (value: string) => updateFilter('oiMin', value),
+    [updateFilter]
+  );
+  const handleOIMaxChange = useCallback(
+    (value: string) => updateFilter('oiMax', value),
+    [updateFilter]
+  );
+  const handleIVMinChange = useCallback(
+    (value: string) => updateFilter('ivMin', value),
+    [updateFilter]
+  );
+  const handleIVMaxChange = useCallback(
+    (value: string) => updateFilter('ivMax', value),
+    [updateFilter]
+  );
+  const handleReturnMinChange = useCallback(
+    (value: string) => updateFilter('returnMin', value),
+    [updateFilter]
+  );
+  const handleReturnMaxChange = useCallback(
+    (value: string) => updateFilter('returnMax', value),
+    [updateFilter]
+  );
 
   const resetAllFilters = () => {
     onFiltersChange({
@@ -136,7 +259,6 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
       volumeMax: '',
       oiMin: '',
       oiMax: '',
-      profitability: 'all',
       ivMin: '',
       ivMax: '',
       returnMin: '',
@@ -160,6 +282,24 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
   const calculateAnnualCost = (): number => {
     if (!currentPrice) return 0;
     return currentPrice * 100 * (locRate / 100);
+  };
+
+  // Check if any filters are active
+  const hasActiveFilters = (): boolean => {
+    return !!(
+      filters.timeMin ||
+      filters.timeMax ||
+      filters.strikeMin ||
+      filters.strikeMax ||
+      filters.volumeMin ||
+      filters.volumeMax ||
+      filters.oiMin ||
+      filters.oiMax ||
+      filters.ivMin ||
+      filters.ivMax ||
+      filters.returnMin ||
+      filters.returnMax
+    );
   };
 
   // Quick button handlers
@@ -193,11 +333,11 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
     }
 
     // Batch update both min and max in a single call
-    onFiltersChange({
-      ...filters,
+    onFiltersChange((prevFilters: FilterValues) => ({
+      ...prevFilters,
       timeMin: newMin,
       timeMax: newMax,
-    });
+    }));
   };
 
   const handleStrikeQuickBtn = (preset: string) => {
@@ -232,11 +372,11 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
     }
 
     // Batch update both min and max in a single call
-    onFiltersChange({
-      ...filters,
+    onFiltersChange((prevFilters: FilterValues) => ({
+      ...prevFilters,
       strikeMin: newMin,
       strikeMax: newMax,
-    });
+    }));
   };
 
   const handleVolumeQuickBtn = (preset: string) => {
@@ -261,11 +401,11 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
     }
 
     // Batch update both min and max in a single call
-    onFiltersChange({
-      ...filters,
+    onFiltersChange((prevFilters: FilterValues) => ({
+      ...prevFilters,
       volumeMin: newMin,
       volumeMax: newMax,
-    });
+    }));
   };
 
   const handleOIQuickBtn = (preset: string) => {
@@ -290,74 +430,18 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
     }
 
     // Batch update both min and max in a single call
-    onFiltersChange({
-      ...filters,
+    onFiltersChange((prevFilters: FilterValues) => ({
+      ...prevFilters,
       oiMin: newMin,
       oiMax: newMax,
-    });
+    }));
   };
-
-  const QuickButton: React.FC<{
-    active: boolean;
-    onClick: () => void;
-    children: React.ReactNode;
-    disabled?: boolean;
-  }> = ({ active, onClick, children, disabled = false }) => (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        'text-xs font-semibold px-2 py-1 rounded transition-all duration-200',
-        active
-          ? 'bg-primary text-primary-foreground shadow-md transform-gpu hover:shadow-lg'
-          : 'bg-muted text-muted-foreground hover:bg-muted/80',
-        disabled && 'opacity-50 cursor-not-allowed'
-      )}
-    >
-      {children}
-    </button>
-  );
-
-  const RangeInput: React.FC<{
-    placeholder: string;
-    value: string;
-    onChange: (value: string) => void;
-    error?: boolean;
-    step?: string;
-    min?: string;
-    max?: string;
-  }> = React.memo(({ placeholder, value, onChange, error = false, step = '0.01', min, max }) => {
-    const handleChange = useCallback(
-      (e: React.ChangeEvent<HTMLInputElement>) => {
-        onChange(e.target.value);
-      },
-      [onChange]
-    );
-
-    return (
-      <Input
-        type="number"
-        placeholder={placeholder}
-        value={value}
-        onChange={handleChange}
-        className={cn(
-          'w-28 h-8 text-xs text-center bg-background border-input',
-          error && 'border-destructive bg-destructive/10'
-        )}
-        step={step}
-        min={min}
-        max={max}
-        autoComplete="off"
-      />
-    );
-  });
-
-  RangeInput.displayName = 'RangeInput';
 
   return (
     <div
       className={cn(
-        'transition-all duration-300 border-2 border-border rounded-xl bg-card/50',
+        'transition-all duration-300 border-2 rounded-xl bg-card/50',
+        hasActiveFilters() ? 'border-green-700' : 'border-border',
         !isExpanded && 'max-h-16 overflow-hidden',
         className
       )}
@@ -366,13 +450,40 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-3">
-            <h3 className="text-lg font-bold text-foreground">Advanced Filters</h3>
+            <h3 className="text-lg font-bold text-foreground">Filters</h3>
             <div className="text-sm font-semibold text-muted-foreground">
               {totalResults} results
               {Object.keys(validationErrors).length > 0 && (
                 <span className="text-red-600 ml-2">⚠ Validation errors</span>
               )}
             </div>
+
+            {/* View toggle buttons inline with header */}
+            {onTabChange && (
+              <div className="flex items-center space-x-1 ml-4">
+                <span className="text-sm font-medium text-muted-foreground mr-2">View</span>
+                <button
+                  onClick={() => onTabChange('all')}
+                  className={`px-3 py-1 text-xs font-semibold rounded transition-all ${
+                    activeTab === 'all'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                  }`}
+                >
+                  All ({totalResults})
+                </button>
+                <button
+                  onClick={() => onTabChange('recommendations')}
+                  className={`px-3 py-1 text-xs font-semibold rounded transition-all ${
+                    activeTab === 'recommendations'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                  }`}
+                >
+                  Recommendations ({recommendationsCount})
+                </button>
+              </div>
+            )}
           </div>
           <div className="flex items-center space-x-2">
             <Button variant="outline" size="sm" onClick={resetAllFilters} className="text-xs">
@@ -401,14 +512,14 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                   <RangeInput
                     placeholder="Min"
                     value={filters.strikeMin}
-                    onChange={value => updateFilter('strikeMin', value)}
+                    onChange={handleStrikeMinChange}
                     error={!!validationErrors.strike}
                   />
                   <span className="text-muted-foreground text-sm">to</span>
                   <RangeInput
                     placeholder="Max"
                     value={filters.strikeMax}
-                    onChange={value => updateFilter('strikeMax', value)}
+                    onChange={handleStrikeMaxChange}
                     error={!!validationErrors.strike}
                   />
                 </div>
@@ -444,7 +555,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                   <RangeInput
                     placeholder="Min"
                     value={filters.volumeMin}
-                    onChange={value => updateFilter('volumeMin', value)}
+                    onChange={handleVolumeMinChange}
                     error={!!validationErrors.volume}
                     step="1"
                     min="0"
@@ -453,7 +564,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                   <RangeInput
                     placeholder="Max"
                     value={filters.volumeMax}
-                    onChange={value => updateFilter('volumeMax', value)}
+                    onChange={handleVolumeMaxChange}
                     error={!!validationErrors.volume}
                     step="1"
                     min="0"
@@ -483,7 +594,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                   <Input
                     type="number"
                     value={locRate}
-                    onChange={e => onLocRateChange(parseFloat(e.target.value) || 0)}
+                    onChange={handleLocRateChange}
                     className="w-16 h-8 text-sm text-center font-semibold"
                     step="0.1"
                     min="0"
@@ -497,7 +608,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
               </div>
             </div>
 
-            {/* Row 2: Time, Open Interest, Profitability */}
+            {/* Row 2: Time, Open Interest, Annual Return */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* Time Range */}
               <div className="space-y-2">
@@ -511,7 +622,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                   <RangeInput
                     placeholder="Min"
                     value={filters.timeMin}
-                    onChange={value => updateFilter('timeMin', value)}
+                    onChange={handleTimeMinChange}
                     error={!!validationErrors.time}
                     step="1"
                     min="0"
@@ -520,7 +631,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                   <RangeInput
                     placeholder="Max"
                     value={filters.timeMax}
-                    onChange={value => updateFilter('timeMax', value)}
+                    onChange={handleTimeMaxChange}
                     error={!!validationErrors.time}
                     step="1"
                     min="0"
@@ -558,7 +669,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                   <RangeInput
                     placeholder="Min"
                     value={filters.oiMin}
-                    onChange={value => updateFilter('oiMin', value)}
+                    onChange={handleOIMinChange}
                     error={!!validationErrors.oi}
                     step="1"
                     min="0"
@@ -567,7 +678,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                   <RangeInput
                     placeholder="Max"
                     value={filters.oiMax}
-                    onChange={value => updateFilter('oiMax', value)}
+                    onChange={handleOIMaxChange}
                     error={!!validationErrors.oi}
                     step="1"
                     min="0"
@@ -590,64 +701,6 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                 </div>
               </div>
 
-              {/* Profitability Filter */}
-              <div className="space-y-2">
-                <label className="block text-sm font-semibold text-foreground">Profitability</label>
-                <div className="space-y-2">
-                  {[
-                    { value: 'all', label: 'All Options' },
-                    { value: 'profitable', label: 'Profits Only' },
-                    { value: 'unprofitable', label: 'Losses Only' },
-                  ].map(option => (
-                    <label key={option.value} className="flex items-center">
-                      <input
-                        type="radio"
-                        value={option.value}
-                        checked={filters.profitability === option.value}
-                        onChange={e => updateFilter('profitability', e.target.value as any)}
-                        className="mr-2"
-                      />
-                      <span className="text-sm">{option.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Row 3: IV Range and Return Range */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Implied Volatility Range */}
-              <div className="space-y-2">
-                <label className="block text-sm font-semibold text-foreground">
-                  Implied Volatility Range (%)
-                  {validationErrors.iv && (
-                    <span className="text-red-600 text-xs ml-2">{validationErrors.iv}</span>
-                  )}
-                </label>
-                <div className="flex items-center space-x-2">
-                  <RangeInput
-                    placeholder="Min"
-                    value={filters.ivMin}
-                    onChange={value => updateFilter('ivMin', value)}
-                    error={!!validationErrors.iv}
-                    step="0.1"
-                    min="0"
-                    max="500"
-                  />
-                  <span className="text-muted-foreground text-sm">to</span>
-                  <RangeInput
-                    placeholder="Max"
-                    value={filters.ivMax}
-                    onChange={value => updateFilter('ivMax', value)}
-                    error={!!validationErrors.iv}
-                    step="0.1"
-                    min="0"
-                    max="500"
-                  />
-                  <span className="text-muted-foreground text-sm">%</span>
-                </div>
-              </div>
-
               {/* Annualized Return Range */}
               <div className="space-y-2">
                 <label className="block text-sm font-semibold text-foreground">
@@ -660,7 +713,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                   <RangeInput
                     placeholder="Min"
                     value={filters.returnMin}
-                    onChange={value => updateFilter('returnMin', value)}
+                    onChange={handleReturnMinChange}
                     error={!!validationErrors.return}
                     step="0.1"
                   />
@@ -668,9 +721,44 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                   <RangeInput
                     placeholder="Max"
                     value={filters.returnMax}
-                    onChange={value => updateFilter('returnMax', value)}
+                    onChange={handleReturnMaxChange}
                     error={!!validationErrors.return}
                     step="0.1"
+                  />
+                  <span className="text-muted-foreground text-sm">%</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Row 3: IV Range */}
+            <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
+              {/* Implied Volatility Range */}
+              <div className="space-y-2">
+                <label className="block text-sm font-semibold text-foreground">
+                  Implied Volatility Range (%)
+                  {validationErrors.iv && (
+                    <span className="text-red-600 text-xs ml-2">{validationErrors.iv}</span>
+                  )}
+                </label>
+                <div className="flex items-center space-x-2">
+                  <RangeInput
+                    placeholder="Min"
+                    value={filters.ivMin}
+                    onChange={handleIVMinChange}
+                    error={!!validationErrors.iv}
+                    step="0.1"
+                    min="0"
+                    max="500"
+                  />
+                  <span className="text-muted-foreground text-sm">to</span>
+                  <RangeInput
+                    placeholder="Max"
+                    value={filters.ivMax}
+                    onChange={handleIVMaxChange}
+                    error={!!validationErrors.iv}
+                    step="0.1"
+                    min="0"
+                    max="500"
                   />
                   <span className="text-muted-foreground text-sm">%</span>
                 </div>

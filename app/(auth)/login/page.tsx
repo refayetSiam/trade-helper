@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
@@ -20,10 +20,15 @@ import { Loader2, TrendingUp } from 'lucide-react';
 
 // Helper function to get the correct app URL
 const getAppUrl = () => {
+  // In client components, prefer window.location.origin
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+
+  // Fallback to environment variables
   let url =
     process?.env?.NEXT_PUBLIC_SITE_URL ?? // First choice: explicit site URL
     process?.env?.NEXT_PUBLIC_VERCEL_URL ?? // Second choice: Vercel URL
-    (typeof window !== 'undefined' ? window.location.origin : '') ?? // Third choice: current origin
     'http://localhost:3000'; // Fallback
 
   // Ensure proper URL format
@@ -38,6 +43,14 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+
+  const handleEmailChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setEmail(e.target.value);
+  }, []);
+
+  const handlePasswordChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setPassword(e.target.value);
+  }, []);
 
   const handleGoogleLogin = async () => {
     try {
@@ -141,7 +154,7 @@ export default function LoginPage() {
               type="email"
               placeholder="Email"
               value={email}
-              onChange={e => setEmail(e.target.value)}
+              onChange={handleEmailChange}
               required
               disabled={isLoading}
             />
@@ -151,7 +164,7 @@ export default function LoginPage() {
               type="password"
               placeholder="Password"
               value={password}
-              onChange={e => setPassword(e.target.value)}
+              onChange={handlePasswordChange}
               required
               disabled={isLoading}
             />

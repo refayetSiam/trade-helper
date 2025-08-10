@@ -12,7 +12,7 @@ import toast from 'react-hot-toast';
 import { useState } from 'react';
 
 const navigation = [
-  { name: 'Covered Calls', href: '/covered-calls', icon: Shield },
+  { name: 'Options', href: '/options', icon: Shield },
   { name: 'Charts', href: '/charts', icon: LineChart },
   { name: 'Watchlist', href: '/watchlist', icon: TrendingUp },
 ];
@@ -30,7 +30,6 @@ export function SidebarNav() {
       // Use window.location to ensure complete refresh and clear any cached data
       window.location.href = '/login';
     } catch (error) {
-      console.error('Signout error:', error);
       toast.error('Error signing out');
     }
   };
@@ -45,8 +44,7 @@ export function SidebarNav() {
       >
         {/* Logo */}
         <div className="flex items-center h-16 px-4 border-b">
-          <TrendingUp className="h-8 w-8 text-primary flex-shrink-0" />
-          {!isCollapsed && <span className="ml-3 text-lg font-semibold">TradingAI</span>}
+          {!isCollapsed && <span className="text-lg font-semibold">Trade Helper</span>}
         </div>
 
         {/* Navigation Items */}

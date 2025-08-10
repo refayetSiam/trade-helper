@@ -56,12 +56,8 @@ class YahooFinanceService {
    */
   async getQuote(symbol: string): Promise<StockQuote> {
     try {
-      console.log(`Fetching quote for ${symbol}...`);
-
       // Use the simplest possible quote call
       const quote = await yahooFinance.quote(symbol);
-
-      console.log('Quote data received:', JSON.stringify(quote, null, 2));
 
       // More robust parsing with fallbacks
       if (!quote) {
@@ -89,7 +85,6 @@ class YahooFinanceService {
         marketState: quoteData.marketState || 'REGULAR',
       };
     } catch (error) {
-      console.error('Error fetching quote:', error);
       throw new Error(`Failed to fetch quote for ${symbol}: ${error}`);
     }
   }
@@ -99,18 +94,14 @@ class YahooFinanceService {
    */
   async getOptionsChain(symbol: string, maxExpirations?: number): Promise<OptionsChainData> {
     try {
-      console.log(`Fetching options chain for ${symbol}...`);
-
       // First get the quote
       const quote = await this.getQuote(symbol);
-      console.log(`Current price for ${symbol}: $${quote.regularMarketPrice}`);
 
       // Get the initial options data to retrieve all available expiration dates
       let initialData;
       try {
         initialData = await yahooFinance.options(symbol, {});
       } catch (error) {
-        console.error('Failed to get initial options data:', error);
         throw new Error(
           `No options data available for ${symbol}. This symbol may not have options trading or may be delisted.`
         );
@@ -124,8 +115,6 @@ class YahooFinanceService {
         throw new Error('No expiration dates found for options');
       }
 
-      console.log(`Found ${initialData.expirationDates.length} expiration dates`);
-
       // Fetch options for all expiration dates
       const allOptions: OptionsExpiry[] = [];
 
@@ -135,8 +124,6 @@ class YahooFinanceService {
 
       for (const expirationDate of datesToFetch) {
         try {
-          console.log(`Fetching options for ${new Date(expirationDate).toLocaleDateString()}...`);
-
           const optionsData = await yahooFinance.options(symbol, { date: expirationDate });
 
           if (optionsData && optionsData.options && optionsData.options.length > 0) {
@@ -195,29 +182,15 @@ class YahooFinanceService {
             });
           }
         } catch (error) {
-          console.warn(
-            `Failed to fetch options for ${new Date(expirationDate).toLocaleDateString()}:`,
-            error
-          );
           // Continue with other dates even if one fails
         }
       }
-
-      console.log(`Processed ${allOptions.length} expiration dates`);
-      allOptions.forEach((expiry, i) => {
-        const expiryDate = new Date(expiry.expirationDate * 1000).toLocaleDateString();
-        console.log(
-          `Expiry ${i + 1} (${expiryDate}): ${expiry.calls.length} calls, ${expiry.puts.length} puts`
-        );
-      });
 
       return {
         quote,
         options: allOptions,
       };
     } catch (error) {
-      console.error('Detailed error fetching options chain:', error);
-
       // If it's a specific error about options not available, provide a helpful message
       const errorMsg = error instanceof Error ? error.message : String(error);
       if (errorMsg?.includes('options') || errorMsg?.includes('Option')) {
@@ -235,10 +208,7 @@ class YahooFinanceService {
    */
   async searchStocks(query: string): Promise<SearchResult[]> {
     try {
-      console.log(`Searching for: ${query}`);
       const results = await yahooFinance.search(query);
-
-      console.log('Search results:', results);
 
       return ((results as any).quotes || [])
         .filter((quote: any) => quote.symbol && (quote.longname || quote.shortname))
@@ -250,7 +220,6 @@ class YahooFinanceService {
           exchange: quote.exchange || '',
         }));
     } catch (error) {
-      console.error('Error searching stocks:', error);
       return [];
     }
   }
@@ -258,19 +227,46 @@ class YahooFinanceService {
   /**
    * Get historical data in ChartDataPoint format
    */
-  async getHistoricalData(symbol: string, range: TimeRange): Promise<ChartDataPoint[]> {
+  async getHistoricalData(
+    symbol: string,
+    range: TimeRange,
+    customInterval?: string | null
+  ): Promise<ChartDataPoint[]> {
+    const { period1, period2, interval: defaultInterval } = this.getYahooPeriod(range);
+    const interval = customInterval || defaultInterval;
+
+    // Check if this is an intraday interval that requires chart API
+    const isIntradayInterval = this.isIntradayInterval(interval);
+
     try {
-      const { period1, period2, interval } = this.getYahooPeriod(range);
+      let history;
 
-      console.log(`📡 Fetching ${symbol} from Yahoo Finance: ${range} (${interval})`);
+      if (isIntradayInterval) {
+        try {
+          history = await yahooFinance.chart(symbol, {
+            period1,
+            period2,
+            interval: interval as any,
+          });
+          // Transform chart response to match historical format
+          history = history.quotes || [];
+        } catch (intradayError) {
+          // Fallback to daily data if intraday fails
+          history = await yahooFinance.historical(symbol, {
+            period1,
+            period2,
+            interval: '1d' as any,
+          });
+        }
+      } else {
+        history = await yahooFinance.historical(symbol, {
+          period1,
+          period2,
+          interval: interval as any,
+        });
+      }
 
-      const history = await yahooFinance.historical(symbol, {
-        period1,
-        period2,
-        interval: interval as any,
-      });
-
-      const chartData: ChartDataPoint[] = history.map(item => ({
+      const chartData: ChartDataPoint[] = history.map((item: any) => ({
         date: new Date(item.date),
         open: item.open || 0,
         high: item.high || 0,
@@ -280,14 +276,39 @@ class YahooFinanceService {
         adjClose: item.adjClose || item.close || 0,
       }));
 
-      console.log(
-        `✅ Yahoo Finance: Fetched ${chartData.length} data points for ${symbol} ${range}`
-      );
       return chartData;
     } catch (error) {
-      console.error(`❌ Yahoo Finance historical data error for ${symbol}:`, error);
-      throw new Error(`Failed to fetch historical data for ${symbol}: ${error}`);
+      // Try one more fallback with the most basic daily data request
+      try {
+        const fallbackHistory = await yahooFinance.historical(symbol, {
+          period1: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // 30 days ago
+          period2: new Date(),
+          interval: '1d' as any,
+        });
+
+        const fallbackData: ChartDataPoint[] = fallbackHistory.map((item: any) => ({
+          date: new Date(item.date),
+          open: item.open || 0,
+          high: item.high || 0,
+          low: item.low || 0,
+          close: item.close || 0,
+          volume: item.volume || 0,
+          adjClose: item.adjClose || item.close || 0,
+        }));
+
+        return fallbackData;
+      } catch (fallbackError) {
+        throw new Error(
+          `Failed to fetch historical data for ${symbol}. Both intraday and daily data requests failed.`
+        );
+      }
     }
+  }
+
+  // Check if interval requires intraday chart API
+  private isIntradayInterval(interval: string): boolean {
+    const intradayIntervals = ['1m', '2m', '5m', '15m', '30m', '60m', '90m', '1h'];
+    return intradayIntervals.includes(interval);
   }
 
   // Convert TimeRange to Yahoo Finance period
@@ -303,7 +324,7 @@ class YahooFinanceService {
         break;
       case '5D':
         period1 = new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000);
-        interval = '1d';
+        interval = '1h'; // Use hourly data for 5-day range
         break;
       case '1M':
         period1 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -346,23 +367,16 @@ class YahooFinanceService {
   }
 
   // Clear cache (for compatibility)
-  clearCache() {
-    console.log('🧹 Yahoo Finance cache cleared (no-op)');
-  }
+  clearCache() {}
 
   /**
    * Test connection with a simple quote call
    */
   async testConnection(symbol: string = 'AAPL'): Promise<boolean> {
     try {
-      console.log(`Testing Yahoo Finance connection with ${symbol}...`);
       const quote = await yahooFinance.quote(symbol);
-      console.log(
-        `✅ Connection test successful. ${symbol} price: $${(quote as any).regularMarketPrice}`
-      );
       return true;
     } catch (error) {
-      console.error('❌ Connection test failed:', error);
       return false;
     }
   }

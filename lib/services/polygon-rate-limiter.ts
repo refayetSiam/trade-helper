@@ -157,7 +157,6 @@ class PolygonRateLimiter {
           request.reject(error);
         }
       } catch (error) {
-        console.error('Error in queue processor:', error);
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
     }
@@ -170,7 +169,6 @@ class PolygonRateLimiter {
     const actualRemoved = removedCount - this.requestQueue.length;
 
     if (actualRemoved > 0) {
-      console.log(`Cleared ${actualRemoved} low priority requests from queue`);
       this.emitStatusUpdate();
     }
   }
@@ -193,9 +191,7 @@ class PolygonRateLimiter {
     this.statusListeners.forEach(callback => {
       try {
         callback(status);
-      } catch (error) {
-        console.error('Error in status listener:', error);
-      }
+      } catch (error) {}
     });
   }
 

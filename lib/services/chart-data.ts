@@ -22,34 +22,34 @@ export interface ChartDataWithFreshness {
 }
 
 export interface TechnicalIndicators {
-  rsi?: number[];
+  rsi?: (number | null)[];
   macd?: {
-    macd: number[];
-    signal: number[];
-    histogram: number[];
+    macd: (number | null)[];
+    signal: (number | null)[];
+    histogram: (number | null)[];
   };
   sma?: {
-    sma20?: number[];
-    sma50?: number[];
-    sma200?: number[];
+    sma20?: (number | null)[];
+    sma50?: (number | null)[];
+    sma200?: (number | null)[];
   };
   ema?: {
-    ema12?: number[];
-    ema26?: number[];
+    ema12?: (number | null)[];
+    ema26?: (number | null)[];
   };
   bollingerBands?: {
-    upper: number[];
-    middle: number[];
-    lower: number[];
+    upper: (number | null)[];
+    middle: (number | null)[];
+    lower: (number | null)[];
   };
   stochastic?: {
-    k: number[];
-    d: number[];
+    k: (number | null)[];
+    d: (number | null)[];
   };
-  atr?: number[];
-  adx?: number[];
-  obv?: number[];
-  vwap?: number[];
+  atr?: (number | null)[];
+  adx?: (number | null)[];
+  obv?: (number | null)[];
+  vwap?: (number | null)[];
 }
 
 export type TimeRange = '1D' | '5D' | '1M' | '3M' | '6M' | 'YTD' | '1Y' | '2Y' | '5Y' | 'MAX';
@@ -87,7 +87,6 @@ export class ChartDataService {
         freshness: result.freshness,
       };
     } catch (error) {
-      console.error('Error fetching chart data:', error);
       throw error;
     }
   }
@@ -107,7 +106,7 @@ export class ChartDataService {
       case '1D':
         return '5m';
       case '5D':
-        return '1d';
+        return '1h'; // Use hourly data for 5-day range
       case '1M':
       case '3M':
       case '6M':
@@ -145,7 +144,7 @@ export class ChartDataService {
 
     // Fill initial values with null
     for (let i = 0; i < period; i++) {
-      rsi.push(0);
+      rsi.push(null);
     }
 
     // Calculate RSI
@@ -173,35 +172,32 @@ export class ChartDataService {
     const ema12 = this.calculateEMA(closes, fastPeriod);
     const ema26 = this.calculateEMA(closes, slowPeriod);
 
-    const macd: number[] = [];
-    const signal: number[] = [];
-    const histogram: number[] = [];
+    const macd: (number | null)[] = [];
+    const signal: (number | null)[] = [];
+    const histogram: (number | null)[] = [];
 
     // Calculate MACD line
     for (let i = 0; i < closes.length; i++) {
       if (i < slowPeriod - 1) {
-        macd.push(0);
+        macd.push(null);
       } else {
         macd.push(ema12[i] - ema26[i]);
       }
     }
 
     // Calculate signal line (EMA of MACD)
-    const signalLine = this.calculateEMA(
-      macd.filter(v => v !== 0),
-      signalPeriod
-    );
+    const signalLine = this.calculateEMA(macd.filter(v => v !== null) as number[], signalPeriod);
 
     // Pad signal line
     for (let i = 0; i < slowPeriod - 1; i++) {
-      signal.push(0);
+      signal.push(null);
     }
     signal.push(...signalLine);
 
     // Calculate histogram
     for (let i = 0; i < closes.length; i++) {
       if (i < slowPeriod - 1) {
-        histogram.push(0);
+        histogram.push(null);
       } else {
         histogram.push(macd[i] - signal[i]);
       }
@@ -211,12 +207,12 @@ export class ChartDataService {
   }
 
   // Calculate Simple Moving Average
-  static calculateSMA(data: number[], period: number): number[] {
-    const sma: number[] = [];
+  static calculateSMA(data: number[], period: number): (number | null)[] {
+    const sma: (number | null)[] = [];
 
     for (let i = 0; i < data.length; i++) {
       if (i < period - 1) {
-        sma.push(0);
+        sma.push(null);
       } else {
         const sum = data.slice(i - period + 1, i + 1).reduce((a, b) => a + b, 0);
         sma.push(sum / period);
@@ -227,8 +223,8 @@ export class ChartDataService {
   }
 
   // Calculate Exponential Moving Average
-  static calculateEMA(data: number[], period: number): number[] {
-    const ema: number[] = [];
+  static calculateEMA(data: number[], period: number): (number | null)[] {
+    const ema: (number | null)[] = [];
     const multiplier = 2 / (period + 1);
 
     // Calculate initial SMA
@@ -236,7 +232,7 @@ export class ChartDataService {
     for (let i = 0; i < period; i++) {
       sum += data[i];
       if (i < period - 1) {
-        ema.push(0);
+        ema.push(null);
       } else {
         ema.push(sum / period);
       }
@@ -254,13 +250,13 @@ export class ChartDataService {
   static calculateBollingerBands(data: ChartDataPoint[], period = 20, stdDev = 2) {
     const closes = data.map(d => d.close);
     const middle = this.calculateSMA(closes, period);
-    const upper: number[] = [];
-    const lower: number[] = [];
+    const upper: (number | null)[] = [];
+    const lower: (number | null)[] = [];
 
     for (let i = 0; i < closes.length; i++) {
       if (i < period - 1) {
-        upper.push(0);
-        lower.push(0);
+        upper.push(null);
+        lower.push(null);
       } else {
         const slice = closes.slice(i - period + 1, i + 1);
         const mean = middle[i];
@@ -277,12 +273,12 @@ export class ChartDataService {
 
   // Calculate Stochastic Oscillator
   static calculateStochastic(data: ChartDataPoint[], kPeriod = 14, dPeriod = 3) {
-    const k: number[] = [];
-    const d: number[] = [];
+    const k: (number | null)[] = [];
+    const d: (number | null)[] = [];
 
     for (let i = 0; i < data.length; i++) {
       if (i < kPeriod - 1) {
-        k.push(0);
+        k.push(null);
       } else {
         const slice = data.slice(i - kPeriod + 1, i + 1);
         const high = Math.max(...slice.map(d => d.high));
@@ -294,14 +290,11 @@ export class ChartDataService {
     }
 
     // Calculate %D (SMA of %K)
-    const dValues = this.calculateSMA(
-      k.filter(v => v !== 0),
-      dPeriod
-    );
+    const dValues = this.calculateSMA(k.filter(v => v !== null) as number[], dPeriod);
 
     // Pad D values
     for (let i = 0; i < kPeriod - 1; i++) {
-      d.push(0);
+      d.push(null);
     }
     d.push(...dValues);
 
@@ -309,8 +302,8 @@ export class ChartDataService {
   }
 
   // Calculate On-Balance Volume (OBV)
-  static calculateOBV(data: ChartDataPoint[]): number[] {
-    const obv: number[] = [0];
+  static calculateOBV(data: ChartDataPoint[]): (number | null)[] {
+    const obv: (number | null)[] = [0]; // Starting with 0 is correct for OBV baseline
 
     for (let i = 1; i < data.length; i++) {
       if (data[i].close > data[i - 1].close) {
@@ -326,8 +319,8 @@ export class ChartDataService {
   }
 
   // Calculate VWAP (Volume Weighted Average Price)
-  static calculateVWAP(data: ChartDataPoint[]): number[] {
-    const vwap: number[] = [];
+  static calculateVWAP(data: ChartDataPoint[]): (number | null)[] {
+    const vwap: (number | null)[] = [];
     let cumulativeTPV = 0;
     let cumulativeVolume = 0;
 
@@ -336,22 +329,22 @@ export class ChartDataService {
       cumulativeTPV += typicalPrice * data[i].volume;
       cumulativeVolume += data[i].volume;
 
-      vwap.push(cumulativeVolume === 0 ? 0 : cumulativeTPV / cumulativeVolume);
+      vwap.push(cumulativeVolume === 0 ? null : cumulativeTPV / cumulativeVolume);
     }
 
     return vwap;
   }
 
   // Calculate ATR (Average True Range)
-  static calculateATR(data: ChartDataPoint[], period = 14): number[] {
-    const atr: number[] = [];
+  static calculateATR(data: ChartDataPoint[], period = 14): (number | null)[] {
+    const atr: (number | null)[] = [];
     const trueRanges: number[] = [];
 
     for (let i = 0; i < data.length; i++) {
       if (i === 0) {
         // First TR is just high - low
         trueRanges.push(data[i].high - data[i].low);
-        atr.push(0);
+        atr.push(null);
       } else {
         // True Range = max(high - low, abs(high - prevClose), abs(low - prevClose))
         const highLow = data[i].high - data[i].low;
@@ -361,7 +354,7 @@ export class ChartDataService {
         trueRanges.push(tr);
 
         if (i < period) {
-          atr.push(0);
+          atr.push(null);
         } else if (i === period) {
           // First ATR is simple average of first period TRs
           const avgTR = trueRanges.slice(1, period + 1).reduce((sum, tr) => sum + tr, 0) / period;

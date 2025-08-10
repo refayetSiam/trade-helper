@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Search,
@@ -31,6 +31,8 @@ import {
 import StockChart from '@/components/shared/stock-chart';
 import PatternEvidencePanel from '@/components/shared/pattern-evidence-panel';
 import PatternConfigurationDrawer from '@/components/shared/pattern-configuration-drawer';
+import StockPriceHeader from '@/components/shared/stock-price-header';
+import { priceService } from '@/lib/services/price-service';
 import {
   ChartDataService,
   ChartDataPoint,
@@ -168,6 +170,17 @@ const ChartsPage: React.FC = () => {
   const [isMarketDataCollapsed, setIsMarketDataCollapsed] = useState(false);
   const [isIndicatorsCollapsed, setIsIndicatorsCollapsed] = useState(false);
 
+  // Consistent price data (always based on recent timeframe, not chart timeframe)
+  const [consistentPriceData, setConsistentPriceData] = useState<{
+    currentPrice: number | null;
+    priceChange: number | null;
+    priceChangePercent: number | null;
+  }>({
+    currentPrice: null,
+    priceChange: null,
+    priceChangePercent: null,
+  });
+
   // Check cache first, then fetch if needed
   const {
     data: chartResult,
@@ -178,13 +191,10 @@ const ChartsPage: React.FC = () => {
     queryKey: ['chartData', symbol, timeRange],
     queryFn: async () => {
       // Check if we have cached data first
-      const cachedData = tradingStore.getCacheData('chart', symbol);
-      if (cachedData && tradingStore.isCacheValid('chart', symbol)) {
-        console.log('Using cached chart data for', symbol);
+      const cachedData = tradingStore.getCacheData('chart', symbol, { timeRange });
+      if (cachedData && tradingStore.isCacheValid('chart', symbol, 5 * 60 * 1000, { timeRange })) {
         return { data: cachedData.data, freshness: null };
       }
-
-      console.log('Fetching fresh chart data for', symbol);
       const result = await ChartDataService.fetchChartData(symbol, timeRange);
 
       // Cache the new data
@@ -222,19 +232,60 @@ const ChartsPage: React.FC = () => {
 
   // Auto-load cached data when symbol changes
   useEffect(() => {
-    if (symbol && tradingStore.isCacheValid('chart', symbol)) {
-      console.log('Auto-loading cached chart data for', symbol);
+    if (symbol && tradingStore.isCacheValid('chart', symbol, 5 * 60 * 1000, { timeRange })) {
       refetch();
     }
-  }, [symbol, tradingStore, refetch]);
+  }, [symbol, timeRange, tradingStore, refetch]);
+
+  // Fetch consistent price data (always based on 5D regardless of chart timerange)
+  const fetchConsistentPriceData = useCallback(async (symbolToFetch: string) => {
+    try {
+      const priceData = await priceService.getPrimaryStockPrice(symbolToFetch, '5D');
+
+      setConsistentPriceData({
+        currentPrice: priceData.currentPrice,
+        priceChange: priceData.priceChange,
+        priceChangePercent: priceData.priceChangePercent,
+      });
+    } catch (error) {
+      setConsistentPriceData({
+        currentPrice: null,
+        priceChange: null,
+        priceChangePercent: null,
+      });
+    }
+  }, []);
+
+  // Note: Removed automatic symbol-triggered fetching to prevent errors on partial symbols
+  // Price data is now fetched manually only via handleSearch() or when clicking Load button
+
+  const handleSymbolChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const newSymbol = e.target.value.toUpperCase();
+      setCurrentSymbol(newSymbol);
+
+      // Clear price data when symbol is cleared
+      if (!newSymbol.trim()) {
+        setConsistentPriceData({
+          currentPrice: null,
+          priceChange: null,
+          priceChangePercent: null,
+        });
+      }
+    },
+    [setCurrentSymbol]
+  );
 
   const handleSearch = () => {
     if (!symbol.trim()) {
       toast.error('Please enter a symbol');
       return;
     }
+
+    // Fetch both chart data and consistent price data
     refetch();
-    toast.loading(`Loading chart for ${symbol.toUpperCase()}...`);
+    fetchConsistentPriceData(symbol);
+    toast.loading(`Loading data for ${symbol.toUpperCase()}...`);
   };
 
   const handleIndicatorToggle = (indicatorId: string, checked: boolean) => {
@@ -334,41 +385,25 @@ const ChartsPage: React.FC = () => {
     });
   };
 
-  const currentPrice =
-    chartData && chartData.length > 0 ? chartData[chartData.length - 1].close : null;
-  const previousPrice =
-    chartData && chartData.length > 1 ? chartData[chartData.length - 2].close : null;
-  const priceChange = currentPrice && previousPrice ? currentPrice - previousPrice : null;
-  const priceChangePercent =
-    priceChange && previousPrice ? (priceChange / previousPrice) * 100 : null;
+  // Use consistent price data for header (not dependent on chart timeframe)
+  const { currentPrice, priceChange, priceChangePercent } = consistentPriceData;
 
   return (
     <div className="h-full flex flex-col space-y-4">
-      {/* Compact Header with Integrated Controls */}
-      <div className="bg-gradient-to-r from-card to-card/50 rounded-lg border shadow-sm">
-        {currentPrice && (
-          <div className="flex items-center justify-between px-4 pt-4">
-            <div className="text-xl font-bold">{symbol.toUpperCase()}</div>
-            <div className="flex items-center gap-2">
-              <span className="text-lg font-semibold">${currentPrice.toFixed(2)}</span>
-              {priceChange && (
-                <Badge
-                  variant={priceChange >= 0 ? 'default' : 'destructive'}
-                  className={priceChange >= 0 ? 'bg-green-100 text-green-800' : ''}
-                >
-                  {priceChange >= 0 ? '+' : ''}${priceChange.toFixed(2)}(
-                  {priceChangePercent
-                    ? `${priceChangePercent >= 0 ? '+' : ''}${priceChangePercent.toFixed(2)}%`
-                    : ''}
-                  )
-                </Badge>
-              )}
-            </div>
-          </div>
-        )}
+      {/* Stock Price Header */}
+      {currentPrice && (
+        <StockPriceHeader
+          symbol={symbol}
+          currentPrice={currentPrice}
+          priceChange={priceChange}
+          priceChangePercent={priceChangePercent}
+        />
+      )}
 
+      {/* Chart Controls */}
+      <div className="bg-gradient-to-r from-card to-card/50 rounded-lg border shadow-sm">
         {/* Controls Bar */}
-        <div className="border-t bg-muted/20 backdrop-blur-sm p-4">
+        <div className="bg-muted/20 backdrop-blur-sm p-4">
           <div className="flex flex-wrap items-center gap-4">
             {/* Symbol Input */}
             <div className="flex items-center gap-2">
@@ -378,7 +413,7 @@ const ChartsPage: React.FC = () => {
                 <Input
                   type="text"
                   value={symbol}
-                  onChange={e => setCurrentSymbol(e.target.value.toUpperCase())}
+                  onChange={handleSymbolChange}
                   placeholder="AAPL"
                   className="pl-8 w-24 h-8"
                   onKeyPress={e => e.key === 'Enter' && handleSearch()}
@@ -823,7 +858,11 @@ const ChartsPage: React.FC = () => {
       </div>
 
       {/* Pattern Evidence Panel */}
-      <PatternEvidencePanel pattern={selectedPattern} onClose={handleClosePatternPanel} />
+      <PatternEvidencePanel
+        pattern={selectedPattern}
+        onClose={handleClosePatternPanel}
+        chartData={chartData}
+      />
 
       {/* Pattern Legend Modal */}
       <PatternLegend isOpen={showPatternLegend} onClose={() => setShowPatternLegend(false)} />

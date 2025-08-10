@@ -290,20 +290,32 @@ class GreeksCalculatorService {
     // InterestCost = (S × 100) × R_borrow × (T / 365)
     const InterestCost = S * 100 * R_borrow * (T / 365);
 
-    // 📈 Covered Call Max Profit
-    // MaxProfit = (min(K – S, 0) + P) × 100 – InterestCost
-    const MaxProfit = (Math.min(K - S, 0) + P) * 100 - InterestCost;
+    // Covered Call Scenarios
+    const B_CC = S * 100; // borrowed capital
 
-    // 📅 Annualized Return
-    // AnnualizedReturn = (MaxProfit / (S × 100)) × (365 / T) × 100
-    const AnnualizedReturn = T > 0 ? (MaxProfit / (S * 100)) * (365 / T) * 100 : 0;
+    // Determine if call is currently ITM or OTM
+    const isCallITM = S > K; // Call is ITM when stock price > strike
 
-    // 🔄 Break-even Price
-    // BreakEven = S – P
-    const BreakEven = S - P;
+    // OTM baseline (guaranteed) - expires worthless
+    const min_profit_CC = P * 100 - InterestCost;
+
+    // ITM scenario - if called/assigned
+    const net_if_called_CC = (K - S) * 100 + P * 100 - InterestCost;
+
+    // Choose appropriate scenario based on current moneyness
+    const NetProfit = isCallITM ? net_if_called_CC : min_profit_CC;
+    const MaxProfitCalled = Math.max(min_profit_CC, net_if_called_CC); // Always show the better outcome
+
+    // 📅 Annualized Return (based on chosen scenario)
+    const AnnualizedReturn = T > 0 ? (NetProfit / B_CC) * (365 / T) * 100 : 0;
+
+    // 🔄 Breakeven (based on chosen scenario)
+    const BreakEven = isCallITM
+      ? S + InterestCost / 100 - P // ITM: breakeven strike adjustment
+      : S - P + InterestCost / 100; // OTM: breakeven stock price
 
     // Maximum loss (if stock goes to zero)
-    // You lose the full stock investment minus premium collected
+    // You lose the full stock investment minus premium collected minus interest
     const maxLoss = S * 100 - P * 100 - InterestCost;
 
     // FIXED: Probability of profit calculation
@@ -315,9 +327,9 @@ class GreeksCalculatorService {
 
     return {
       costOfBorrowing: InterestCost,
-      maxProfit: MaxProfit,
+      maxProfit: MaxProfitCalled,
       maxLoss,
-      netProfit: MaxProfit, // Use MaxProfit as the net profit
+      netProfit: NetProfit,
       annualizedReturn: AnnualizedReturn,
       breakeven: BreakEven,
       daysToExpiry: T,

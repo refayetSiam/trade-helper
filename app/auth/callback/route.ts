@@ -10,12 +10,10 @@ export async function GET(request: NextRequest) {
 
   // Handle OAuth provider errors
   if (error) {
-    console.error('OAuth provider error:', error);
     return NextResponse.redirect(new URL('/auth/auth-code-error', request.url));
   }
 
   if (!code) {
-    console.error('No authorization code received');
     return NextResponse.redirect(new URL('/auth/auth-code-error', request.url));
   }
 
@@ -24,12 +22,10 @@ export async function GET(request: NextRequest) {
     const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
 
     if (exchangeError) {
-      console.error('Error exchanging code for session:', exchangeError.message);
       return NextResponse.redirect(new URL('/auth/auth-code-error', request.url));
     }
 
     if (!data.session) {
-      console.error('No session created after code exchange');
       return NextResponse.redirect(new URL('/auth/auth-code-error', request.url));
     }
 
@@ -50,7 +46,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.redirect(`${redirectOrigin}${next}`);
   } catch (err) {
-    console.error('Unexpected error in auth callback:', err);
     return NextResponse.redirect(new URL('/auth/auth-code-error', request.url));
   }
 }

@@ -28,6 +28,7 @@ import {
 } from '@/lib/services/pattern-detection';
 import { format } from 'date-fns';
 import FloatingIndicatorPanel from './floating-indicator-panel';
+import ChartPointDetailsModal from './chart-point-details-modal';
 
 interface StockChartProps {
   data: ChartDataPoint[];
@@ -138,15 +139,8 @@ const StockChart: React.FC<StockChartProps> = ({
   // Detect patterns and generate overlays
   const { detectedPatterns, patternOverlays, supportResistanceLevels } = useMemo(() => {
     if (!patternsEnabled || !data || data.length < 10) {
-      console.log('Pattern detection skipped:', { patternsEnabled, dataLength: data?.length });
       return { detectedPatterns: [], patternOverlays: [], supportResistanceLevels: [] };
     }
-
-    console.log('Running pattern detection with:', {
-      dataLength: data.length,
-      patternTypes,
-      indicatorsAvailable: Object.keys(indicators).length,
-    });
 
     let allPatterns: DetectedPattern[] = [];
 
@@ -218,13 +212,6 @@ const StockChart: React.FC<StockChartProps> = ({
       data
     );
 
-    console.log('Pattern detection results:', {
-      patternsFound: allPatterns.length,
-      overlaysGenerated: overlays.length,
-      patternTypes: allPatterns.map(p => p.type),
-      patternNames: allPatterns.map(p => p.name),
-    });
-
     return {
       detectedPatterns: allPatterns,
       patternOverlays: overlays,
@@ -285,9 +272,30 @@ const StockChart: React.FC<StockChartProps> = ({
   // Prepare chart data with indicators and pattern markers
   const chartData = useMemo(() => {
     return data.map((point, index) => {
+      // Ensure date is a Date object
+      const pointDate = point.date instanceof Date ? point.date : new Date(point.date);
+
+      // Format date string based on data frequency
+      let dateStr: string;
+      const now = new Date();
+      const diffDays = Math.abs(now.getTime() - pointDate.getTime()) / (1000 * 60 * 60 * 24);
+
+      // If data is very recent (within 7 days), likely intraday - show time
+      if (diffDays <= 7 && data.length > 50) {
+        // For intraday data, show time
+        dateStr = format(pointDate, 'h:mm a');
+      } else if (diffDays <= 30) {
+        // For recent data, show month/day
+        dateStr = format(pointDate, 'MMM dd');
+      } else {
+        // For older data, show month/year
+        dateStr = format(pointDate, 'MMM yy');
+      }
+
       const dataPoint: any = {
         ...point,
-        dateStr: format(point.date, 'MMM dd'),
+        date: pointDate, // Use the converted Date object
+        dateStr,
         volumeM: point.volume / 1000000, // Volume in millions
         index, // Add index for pattern matching
       };
@@ -296,22 +304,22 @@ const StockChart: React.FC<StockChartProps> = ({
         index > 0 && point.close >= data[index - 1].close ? '#34d399' : '#f87171'; // Lighter green if price up, lighter red if down
 
       // Add indicators
-      dataPoint.rsi = indicators.rsi?.[index] || null;
-      dataPoint.macd = indicators.macd?.macd[index] || null;
-      dataPoint.macdSignal = indicators.macd?.signal[index] || null;
-      dataPoint.macdHistogram = indicators.macd?.histogram[index] || null;
-      dataPoint.sma20 = indicators.sma?.sma20?.[index] || null;
-      dataPoint.sma50 = indicators.sma?.sma50?.[index] || null;
-      dataPoint.sma200 = indicators.sma?.sma200?.[index] || null;
-      dataPoint.ema12 = indicators.ema?.ema12?.[index] || null;
-      dataPoint.ema26 = indicators.ema?.ema26?.[index] || null;
-      dataPoint.bbUpper = indicators.bollingerBands?.upper[index] || null;
-      dataPoint.bbMiddle = indicators.bollingerBands?.middle[index] || null;
-      dataPoint.bbLower = indicators.bollingerBands?.lower[index] || null;
-      dataPoint.stochK = indicators.stochastic?.k[index] || null;
-      dataPoint.stochD = indicators.stochastic?.d[index] || null;
-      dataPoint.obv = indicators.obv?.[index] || null;
-      dataPoint.vwap = indicators.vwap?.[index] || null;
+      dataPoint.rsi = indicators.rsi?.[index] ?? null;
+      dataPoint.macd = indicators.macd?.macd[index] ?? null;
+      dataPoint.macdSignal = indicators.macd?.signal[index] ?? null;
+      dataPoint.macdHistogram = indicators.macd?.histogram[index] ?? null;
+      dataPoint.sma20 = indicators.sma?.sma20?.[index] ?? null;
+      dataPoint.sma50 = indicators.sma?.sma50?.[index] ?? null;
+      dataPoint.sma200 = indicators.sma?.sma200?.[index] ?? null;
+      dataPoint.ema12 = indicators.ema?.ema12?.[index] ?? null;
+      dataPoint.ema26 = indicators.ema?.ema26?.[index] ?? null;
+      dataPoint.bbUpper = indicators.bollingerBands?.upper[index] ?? null;
+      dataPoint.bbMiddle = indicators.bollingerBands?.middle[index] ?? null;
+      dataPoint.bbLower = indicators.bollingerBands?.lower[index] ?? null;
+      dataPoint.stochK = indicators.stochastic?.k[index] ?? null;
+      dataPoint.stochD = indicators.stochastic?.d[index] ?? null;
+      dataPoint.obv = indicators.obv?.[index] ?? null;
+      dataPoint.vwap = indicators.vwap?.[index] ?? null;
 
       // Mark pattern points
       const patternAtIndex = detectedPatterns.find(
@@ -332,23 +340,43 @@ const StockChart: React.FC<StockChartProps> = ({
   const [indicatorTooltipPosition, setIndicatorTooltipPosition] = useState({ x: 0, y: 0 });
   const [isFloatingPanelPinned, setIsFloatingPanelPinned] = useState(false);
 
+  // State for chart point details modal
+  const [showPointDetailsModal, setShowPointDetailsModal] = useState(false);
+  const [selectedDataPoint, setSelectedDataPoint] = useState<ChartDataPoint | null>(null);
+
   // Custom tooltip with floating panel functionality
   const CustomTooltip = ({ active, payload, label, coordinate }: any) => {
-    if (active && payload && payload.length) {
-      const data = payload[0].payload;
+    // Update tooltip data and position - move state updates outside useEffect to prevent infinite loops
+    React.useEffect(() => {
+      if (active && payload && payload.length && coordinate) {
+        const data = payload[0].payload;
+        // Only update if data has actually changed to prevent infinite loops
+        setIndicatorTooltipData((prevData: any) => {
+          if (prevData?.dateStr !== data?.dateStr || prevData?.close !== data?.close) {
+            return data;
+          }
+          return prevData;
+        });
 
-      // Update tooltip data and position for floating panel
-      if (data !== indicatorTooltipData && coordinate) {
-        setIndicatorTooltipData(data);
         // Convert chart coordinates to screen coordinates
         const rect = document.querySelector('.recharts-wrapper')?.getBoundingClientRect();
         if (rect) {
-          setIndicatorTooltipPosition({
+          const newPosition = {
             x: rect.left + coordinate.x,
             y: rect.top + coordinate.y,
+          };
+          setIndicatorTooltipPosition((prevPos: any) => {
+            if (prevPos.x !== newPosition.x || prevPos.y !== newPosition.y) {
+              return newPosition;
+            }
+            return prevPos;
           });
         }
       }
+    }, [active, payload?.[0]?.payload?.dateStr, coordinate?.x, coordinate?.y]);
+
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
 
       return (
         <div
@@ -384,11 +412,9 @@ const StockChart: React.FC<StockChartProps> = ({
                 ${data.close?.toFixed(1)}
               </span>
             </div>
-            {selectedIndicators.length > 0 && (
-              <div className="text-xs text-center text-muted-foreground mt-1 border-t pt-1">
-                Click for details • Double-click to pin
-              </div>
-            )}
+            <div className="text-xs text-center text-muted-foreground mt-1 border-t pt-1">
+              Click chart point for full details
+            </div>
           </div>
         </div>
       );
@@ -415,25 +441,36 @@ const StockChart: React.FC<StockChartProps> = ({
             title={showPatternLegend ? 'Hide patterns' : 'Show patterns'}
           >
             <span
-              className={`transform transition-all duration-300 ease-in-out ${
-                showPatternLegend ? 'rotate-180' : 'rotate-0'
+              className={`transform transition-all duration-300 ease-out ${
+                showPatternLegend ? 'rotate-180 scale-110' : 'rotate-0 scale-100'
               }`}
             >
-              {showPatternLegend ? '−' : '+'}
+              <svg width="16" height="16" viewBox="0 0 16 16" className="fill-current">
+                <path
+                  d="M4 6L8 10L12 6"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
             </span>
           </button>
         </div>
 
         <div
-          className={`overflow-hidden transition-all duration-500 ease-in-out ${
-            showPatternLegend ? 'max-h-[32rem] opacity-100' : 'max-h-0 opacity-0'
+          className={`overflow-hidden transition-all duration-500 ${
+            showPatternLegend
+              ? 'max-h-[32rem] opacity-100 ease-out'
+              : 'max-h-0 opacity-0 ease-in-out'
           }`}
         >
           <div
-            className={`p-3 space-y-3 text-xs transition-all duration-400 delay-100 ${
+            className={`p-3 space-y-3 text-xs transition-all duration-400 ${
               showPatternLegend
-                ? 'opacity-100 transform translate-y-0'
-                : 'opacity-0 transform -translate-y-2'
+                ? 'opacity-100 transform translate-y-0 scale-100 delay-150'
+                : 'opacity-0 transform -translate-y-3 scale-95 delay-0'
             }`}
           >
             {detectedPatterns.map((pattern, idx) => {
@@ -551,6 +588,28 @@ const StockChart: React.FC<StockChartProps> = ({
     }
   };
 
+  // Handle chart point click
+  const handleChartClick = (data: any) => {
+    // Check if we have activePayload (clicking on data point)
+    if (data && data.activePayload && data.activePayload.length > 0) {
+      const clickedPoint = data.activePayload[0].payload;
+
+      if (clickedPoint) {
+        // The payload should already have the index from our chartData
+        setSelectedDataPoint(clickedPoint);
+        setShowPointDetailsModal(true);
+      }
+    } else if (data && data.activeLabel) {
+      // Alternative: Sometimes Recharts provides activeLabel instead
+      // Try to find the data point by date
+      const point = chartData.find(d => d.dateStr === data.activeLabel);
+      if (point) {
+        setSelectedDataPoint(point);
+        setShowPointDetailsModal(true);
+      }
+    }
+  };
+
   // Render combined price and volume chart
   const renderMainChart = () => {
     // Responsive height: taller on larger screens
@@ -561,7 +620,7 @@ const StockChart: React.FC<StockChartProps> = ({
         return (
           <div className="relative" onWheel={handleWheel}>
             <ResponsiveContainer width="100%" height={height}>
-              <ComposedChart data={chartData}>
+              <ComposedChart data={chartData} isAnimationActive={false} onClick={handleChartClick}>
                 <defs>
                   <linearGradient id="colorClose" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
@@ -607,7 +666,13 @@ const StockChart: React.FC<StockChartProps> = ({
                 />
 
                 {/* Volume Bars */}
-                <Bar yAxisId="volume" dataKey="volume" name="Volume" shape={VolumeBar} />
+                <Bar
+                  yAxisId="volume"
+                  dataKey="volume"
+                  name="Volume"
+                  shape={VolumeBar}
+                  isAnimationActive={false}
+                />
 
                 {/* Price Area */}
                 <Area
@@ -617,7 +682,16 @@ const StockChart: React.FC<StockChartProps> = ({
                   stroke="#3b82f6"
                   fill="url(#colorClose)"
                   strokeWidth={2}
+                  dot={{
+                    r: 3,
+                    strokeWidth: 1,
+                    stroke: '#3b82f6',
+                    fill: '#ffffff',
+                    cursor: 'pointer',
+                  }}
+                  activeDot={{ r: 5, strokeWidth: 2, stroke: '#3b82f6', fill: '#3b82f6' }}
                   name={`${symbol} Close`}
+                  isAnimationActive={false}
                 />
 
                 {/* Moving Averages */}
@@ -631,6 +705,7 @@ const StockChart: React.FC<StockChartProps> = ({
                     dot={false}
                     connectNulls={false}
                     name="SMA 20"
+                    isAnimationActive={false}
                   />
                 )}
                 {selectedIndicators.includes('sma50') && (
@@ -643,6 +718,7 @@ const StockChart: React.FC<StockChartProps> = ({
                     dot={false}
                     connectNulls={false}
                     name="SMA 50"
+                    isAnimationActive={false}
                   />
                 )}
                 {selectedIndicators.includes('bollinger') && (
@@ -657,6 +733,7 @@ const StockChart: React.FC<StockChartProps> = ({
                       dot={false}
                       connectNulls={false}
                       name="BB Upper"
+                      isAnimationActive={false}
                     />
                     <Line
                       yAxisId="price"
@@ -668,6 +745,7 @@ const StockChart: React.FC<StockChartProps> = ({
                       dot={false}
                       connectNulls={false}
                       name="BB Lower"
+                      isAnimationActive={false}
                     />
                   </>
                 )}
@@ -848,6 +926,7 @@ const StockChart: React.FC<StockChartProps> = ({
                   startIndex={zoomDomain?.left || 0}
                   endIndex={zoomDomain?.right || chartData.length - 1}
                   onChange={handleZoom}
+                  isAnimationActive={false}
                 />
               </ComposedChart>
             </ResponsiveContainer>
@@ -856,22 +935,24 @@ const StockChart: React.FC<StockChartProps> = ({
             <CustomLegend />
 
             {/* No Good Entry Indicator */}
-            {patternsEnabled && detectedPatterns.length === 0 && (
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="bg-orange-900/80 backdrop-blur-sm border border-orange-500/50 rounded-lg px-6 py-4 text-center max-w-md">
-                  <h3 className="text-orange-200 font-bold text-lg mb-2">
-                    No Good Entry Opportunities Right Now
-                  </h3>
-                  <p className="text-orange-300 text-sm">
-                    {swingTradingMode
-                      ? 'No swing setups found. Wait for trend + volume + momentum alignment.'
-                      : intradayMode
-                        ? 'No gap-up breakouts detected. Look for morning gaps >0.3% with volume.'
-                        : 'No significant patterns found. Try enabling specific trading modes.'}
-                  </p>
+            {patternsEnabled &&
+              (patternTypes?.length > 0 || swingTradingMode || intradayMode) &&
+              detectedPatterns.length === 0 && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="bg-orange-900/80 backdrop-blur-sm border border-orange-500/50 rounded-lg px-6 py-4 text-center max-w-md">
+                    <h3 className="text-orange-200 font-bold text-lg mb-2">
+                      No Good Entry Opportunities Right Now
+                    </h3>
+                    <p className="text-orange-300 text-sm">
+                      {swingTradingMode
+                        ? 'No swing setups found. Wait for trend + volume + momentum alignment.'
+                        : intradayMode
+                          ? 'No gap-up breakouts detected. Look for morning gaps >0.3% with volume.'
+                          : 'No significant patterns found. Try enabling specific trading modes.'}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
             {/* PatternOverlayComponent removed - patterns now rendered inline */}
           </div>
@@ -881,7 +962,7 @@ const StockChart: React.FC<StockChartProps> = ({
         return (
           <div className="relative" onWheel={handleWheel}>
             <ResponsiveContainer width="100%" height={height}>
-              <ComposedChart data={chartData}>
+              <ComposedChart data={chartData} isAnimationActive={false} onClick={handleChartClick}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                 <XAxis
                   dataKey="dateStr"
@@ -921,13 +1002,20 @@ const StockChart: React.FC<StockChartProps> = ({
                 />
 
                 {/* Volume Bars */}
-                <Bar yAxisId="volume" dataKey="volume" name="Volume" shape={VolumeBar} />
+                <Bar
+                  yAxisId="volume"
+                  dataKey="volume"
+                  name="Volume"
+                  shape={VolumeBar}
+                  isAnimationActive={false}
+                />
 
                 {/* Candlestick */}
                 <Bar
                   yAxisId="price"
                   dataKey="close"
                   name={`${symbol} Price`}
+                  isAnimationActive={false}
                   shape={(props: any) => {
                     const { x, y, width, height, payload } = props;
                     if (!payload) return <></>; // Return empty fragment instead of null
@@ -989,6 +1077,7 @@ const StockChart: React.FC<StockChartProps> = ({
                     dot={false}
                     connectNulls={false}
                     name="SMA 20"
+                    isAnimationActive={false}
                   />
                 )}
                 {selectedIndicators.includes('sma50') && (
@@ -1001,6 +1090,7 @@ const StockChart: React.FC<StockChartProps> = ({
                     dot={false}
                     connectNulls={false}
                     name="SMA 50"
+                    isAnimationActive={false}
                   />
                 )}
                 {selectedIndicators.includes('sma200') && (
@@ -1013,6 +1103,7 @@ const StockChart: React.FC<StockChartProps> = ({
                     dot={false}
                     connectNulls={false}
                     name="SMA 200"
+                    isAnimationActive={false}
                   />
                 )}
 
@@ -1192,6 +1283,7 @@ const StockChart: React.FC<StockChartProps> = ({
                   startIndex={zoomDomain?.left || 0}
                   endIndex={zoomDomain?.right || chartData.length - 1}
                   onChange={handleZoom}
+                  isAnimationActive={false}
                 />
               </ComposedChart>
             </ResponsiveContainer>
@@ -1200,22 +1292,24 @@ const StockChart: React.FC<StockChartProps> = ({
             <CustomLegend />
 
             {/* No Good Entry Indicator */}
-            {patternsEnabled && detectedPatterns.length === 0 && (
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="bg-orange-900/80 backdrop-blur-sm border border-orange-500/50 rounded-lg px-6 py-4 text-center max-w-md">
-                  <h3 className="text-orange-200 font-bold text-lg mb-2">
-                    No Good Entry Opportunities Right Now
-                  </h3>
-                  <p className="text-orange-300 text-sm">
-                    {swingTradingMode
-                      ? 'No swing setups found. Wait for trend + volume + momentum alignment.'
-                      : intradayMode
-                        ? 'No gap-up breakouts detected. Look for morning gaps >0.3% with volume.'
-                        : 'No significant patterns found. Try enabling specific trading modes.'}
-                  </p>
+            {patternsEnabled &&
+              (patternTypes?.length > 0 || swingTradingMode || intradayMode) &&
+              detectedPatterns.length === 0 && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="bg-orange-900/80 backdrop-blur-sm border border-orange-500/50 rounded-lg px-6 py-4 text-center max-w-md">
+                    <h3 className="text-orange-200 font-bold text-lg mb-2">
+                      No Good Entry Opportunities Right Now
+                    </h3>
+                    <p className="text-orange-300 text-sm">
+                      {swingTradingMode
+                        ? 'No swing setups found. Wait for trend + volume + momentum alignment.'
+                        : intradayMode
+                          ? 'No gap-up breakouts detected. Look for morning gaps >0.3% with volume.'
+                          : 'No significant patterns found. Try enabling specific trading modes.'}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
             {/* PatternOverlayComponent removed - patterns now rendered inline */}
           </div>
@@ -1226,7 +1320,7 @@ const StockChart: React.FC<StockChartProps> = ({
         return (
           <div className="relative" onWheel={handleWheel}>
             <ResponsiveContainer width="100%" height={height}>
-              <ComposedChart data={chartData}>
+              <ComposedChart data={chartData} isAnimationActive={false} onClick={handleChartClick}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                 <XAxis
                   dataKey="dateStr"
@@ -1266,7 +1360,13 @@ const StockChart: React.FC<StockChartProps> = ({
                 />
 
                 {/* Volume Bars */}
-                <Bar yAxisId="volume" dataKey="volume" name="Volume" shape={VolumeBar} />
+                <Bar
+                  yAxisId="volume"
+                  dataKey="volume"
+                  name="Volume"
+                  shape={VolumeBar}
+                  isAnimationActive={false}
+                />
 
                 {/* Price Line */}
                 <Line
@@ -1275,8 +1375,16 @@ const StockChart: React.FC<StockChartProps> = ({
                   dataKey="close"
                   stroke="#3b82f6"
                   strokeWidth={3}
-                  dot={false}
+                  dot={{
+                    r: 3,
+                    strokeWidth: 1,
+                    stroke: '#3b82f6',
+                    fill: '#ffffff',
+                    cursor: 'pointer',
+                  }}
+                  activeDot={{ r: 5, strokeWidth: 2, stroke: '#3b82f6', fill: '#3b82f6' }}
                   name={`${symbol} Close`}
+                  isAnimationActive={false}
                 />
 
                 {/* Moving Averages */}
@@ -1290,6 +1398,7 @@ const StockChart: React.FC<StockChartProps> = ({
                     dot={false}
                     connectNulls={false}
                     name="SMA 20"
+                    isAnimationActive={false}
                   />
                 )}
                 {selectedIndicators.includes('sma50') && (
@@ -1302,6 +1411,7 @@ const StockChart: React.FC<StockChartProps> = ({
                     dot={false}
                     connectNulls={false}
                     name="SMA 50"
+                    isAnimationActive={false}
                   />
                 )}
                 {selectedIndicators.includes('sma200') && (
@@ -1314,6 +1424,7 @@ const StockChart: React.FC<StockChartProps> = ({
                     dot={false}
                     connectNulls={false}
                     name="SMA 200"
+                    isAnimationActive={false}
                   />
                 )}
                 {selectedIndicators.includes('ema12') && (
@@ -1326,6 +1437,7 @@ const StockChart: React.FC<StockChartProps> = ({
                     dot={false}
                     connectNulls={false}
                     name="EMA 12"
+                    isAnimationActive={false}
                   />
                 )}
                 {selectedIndicators.includes('ema26') && (
@@ -1338,6 +1450,7 @@ const StockChart: React.FC<StockChartProps> = ({
                     dot={false}
                     connectNulls={false}
                     name="EMA 26"
+                    isAnimationActive={false}
                   />
                 )}
                 {selectedIndicators.includes('vwap') && (
@@ -1350,6 +1463,7 @@ const StockChart: React.FC<StockChartProps> = ({
                     dot={false}
                     connectNulls={false}
                     name="VWAP"
+                    isAnimationActive={false}
                   />
                 )}
 
@@ -1366,6 +1480,7 @@ const StockChart: React.FC<StockChartProps> = ({
                       dot={false}
                       connectNulls={false}
                       name="BB Upper"
+                      isAnimationActive={false}
                     />
                     <Line
                       yAxisId="price"
@@ -1376,6 +1491,7 @@ const StockChart: React.FC<StockChartProps> = ({
                       dot={false}
                       connectNulls={false}
                       name="BB Middle"
+                      isAnimationActive={false}
                     />
                     <Line
                       yAxisId="price"
@@ -1387,6 +1503,7 @@ const StockChart: React.FC<StockChartProps> = ({
                       dot={false}
                       connectNulls={false}
                       name="BB Lower"
+                      isAnimationActive={false}
                     />
                   </>
                 )}
@@ -1567,6 +1684,7 @@ const StockChart: React.FC<StockChartProps> = ({
                   startIndex={zoomDomain?.left || 0}
                   endIndex={zoomDomain?.right || chartData.length - 1}
                   onChange={handleZoom}
+                  isAnimationActive={false}
                 />
               </ComposedChart>
             </ResponsiveContainer>
@@ -1575,22 +1693,24 @@ const StockChart: React.FC<StockChartProps> = ({
             <CustomLegend />
 
             {/* No Good Entry Indicator */}
-            {patternsEnabled && detectedPatterns.length === 0 && (
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="bg-orange-900/80 backdrop-blur-sm border border-orange-500/50 rounded-lg px-6 py-4 text-center max-w-md">
-                  <h3 className="text-orange-200 font-bold text-lg mb-2">
-                    No Good Entry Opportunities Right Now
-                  </h3>
-                  <p className="text-orange-300 text-sm">
-                    {swingTradingMode
-                      ? 'No swing setups found. Wait for trend + volume + momentum alignment.'
-                      : intradayMode
-                        ? 'No gap-up breakouts detected. Look for morning gaps >0.3% with volume.'
-                        : 'No significant patterns found. Try enabling specific trading modes.'}
-                  </p>
+            {patternsEnabled &&
+              (patternTypes?.length > 0 || swingTradingMode || intradayMode) &&
+              detectedPatterns.length === 0 && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="bg-orange-900/80 backdrop-blur-sm border border-orange-500/50 rounded-lg px-6 py-4 text-center max-w-md">
+                    <h3 className="text-orange-200 font-bold text-lg mb-2">
+                      No Good Entry Opportunities Right Now
+                    </h3>
+                    <p className="text-orange-300 text-sm">
+                      {swingTradingMode
+                        ? 'No swing setups found. Wait for trend + volume + momentum alignment.'
+                        : intradayMode
+                          ? 'No gap-up breakouts detected. Look for morning gaps >0.3% with volume.'
+                          : 'No significant patterns found. Try enabling specific trading modes.'}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
             {/* PatternOverlayComponent removed - patterns now rendered inline */}
           </div>
@@ -1615,7 +1735,7 @@ const StockChart: React.FC<StockChartProps> = ({
               RSI (14)
             </h4>
             <ResponsiveContainer width="100%" height={120}>
-              <LineChart data={chartData}>
+              <LineChart data={chartData} isAnimationActive={false}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                 <XAxis
                   dataKey="dateStr"
@@ -1647,6 +1767,7 @@ const StockChart: React.FC<StockChartProps> = ({
                   strokeWidth={2}
                   dot={false}
                   connectNulls={false}
+                  isAnimationActive={false}
                 />
                 {/* RSI levels */}
                 <Line
@@ -1656,6 +1777,7 @@ const StockChart: React.FC<StockChartProps> = ({
                   strokeWidth={1}
                   strokeDasharray="3 3"
                   dot={false}
+                  isAnimationActive={false}
                 />
                 <Line
                   type="monotone"
@@ -1664,6 +1786,7 @@ const StockChart: React.FC<StockChartProps> = ({
                   strokeWidth={1}
                   strokeDasharray="3 3"
                   dot={false}
+                  isAnimationActive={false}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -1677,7 +1800,7 @@ const StockChart: React.FC<StockChartProps> = ({
               MACD (12, 26, 9)
             </h4>
             <ResponsiveContainer width="100%" height={120}>
-              <ComposedChart data={chartData}>
+              <ComposedChart data={chartData} isAnimationActive={false} onClick={handleChartClick}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                 <XAxis
                   dataKey="dateStr"
@@ -1701,7 +1824,12 @@ const StockChart: React.FC<StockChartProps> = ({
                     color: '#ffffff',
                   }}
                 />
-                <Bar dataKey="macdHistogram" fill="#6b7280" opacity={0.6} />
+                <Bar
+                  dataKey="macdHistogram"
+                  fill="#6b7280"
+                  opacity={0.6}
+                  isAnimationActive={false}
+                />
                 <Line
                   type="monotone"
                   dataKey="macd"
@@ -1709,6 +1837,7 @@ const StockChart: React.FC<StockChartProps> = ({
                   strokeWidth={2}
                   dot={false}
                   connectNulls={false}
+                  isAnimationActive={false}
                 />
                 <Line
                   type="monotone"
@@ -1717,6 +1846,7 @@ const StockChart: React.FC<StockChartProps> = ({
                   strokeWidth={2}
                   dot={false}
                   connectNulls={false}
+                  isAnimationActive={false}
                 />
               </ComposedChart>
             </ResponsiveContainer>
@@ -1730,7 +1860,7 @@ const StockChart: React.FC<StockChartProps> = ({
               Stochastic (14, 3)
             </h4>
             <ResponsiveContainer width="100%" height={120}>
-              <LineChart data={chartData}>
+              <LineChart data={chartData} isAnimationActive={false}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                 <XAxis
                   dataKey="dateStr"
@@ -1762,6 +1892,7 @@ const StockChart: React.FC<StockChartProps> = ({
                   strokeWidth={2}
                   dot={false}
                   connectNulls={false}
+                  isAnimationActive={false}
                 />
                 <Line
                   type="monotone"
@@ -1770,6 +1901,7 @@ const StockChart: React.FC<StockChartProps> = ({
                   strokeWidth={2}
                   dot={false}
                   connectNulls={false}
+                  isAnimationActive={false}
                 />
                 {/* Stochastic levels */}
                 <Line
@@ -1779,6 +1911,7 @@ const StockChart: React.FC<StockChartProps> = ({
                   strokeWidth={1}
                   strokeDasharray="3 3"
                   dot={false}
+                  isAnimationActive={false}
                 />
                 <Line
                   type="monotone"
@@ -1787,6 +1920,7 @@ const StockChart: React.FC<StockChartProps> = ({
                   strokeWidth={1}
                   strokeDasharray="3 3"
                   dot={false}
+                  isAnimationActive={false}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -1981,6 +2115,16 @@ const StockChart: React.FC<StockChartProps> = ({
         }}
         onPin={() => setIsFloatingPanelPinned(!isFloatingPanelPinned)}
         onMove={position => setIndicatorTooltipPosition(position)}
+      />
+
+      {/* Chart Point Details Modal */}
+      <ChartPointDetailsModal
+        isOpen={showPointDetailsModal}
+        onClose={() => setShowPointDetailsModal(false)}
+        dataPoint={selectedDataPoint}
+        indicators={indicators}
+        selectedIndicators={selectedIndicators}
+        patterns={detectedPatterns}
       />
     </div>
   );

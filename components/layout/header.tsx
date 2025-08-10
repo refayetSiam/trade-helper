@@ -14,13 +14,19 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Search, User as UserIcon } from 'lucide-react';
+import { Search, User as UserIcon, LucideIcon } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import ApiRateCounter from '@/components/shared/api-rate-counter';
 
-export function Header() {
+interface HeaderProps {
+  title?: string;
+  subtitle?: string;
+  icon?: LucideIcon;
+}
+
+export function Header({ title, subtitle, icon: Icon }: HeaderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [marketStatus, setMarketStatus] = useState<'open' | 'closed'>('closed');
   const router = useRouter();
@@ -34,7 +40,6 @@ export function Header() {
       // Use window.location to ensure complete refresh and clear any cached data
       window.location.href = '/login';
     } catch (error) {
-      console.error('Signout error:', error);
       toast.error('Error signing out');
     }
   };
@@ -42,10 +47,19 @@ export function Header() {
   useEffect(() => {
     const supabase = createClient();
 
-    // Get user
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setUser(user);
-    });
+    // Get user with error handling
+    supabase.auth
+      .getUser()
+      .then(({ data: { user }, error }) => {
+        if (error) {
+          // Don't set user to null on error - keep existing state
+          return;
+        }
+        setUser(user);
+      })
+      .catch(error => {
+        // Error handled silently
+      });
 
     // Check market status
     const checkMarketStatus = () => {
@@ -72,8 +86,16 @@ export function Header() {
 
   return (
     <header className="h-16 border-b bg-card px-6 flex items-center justify-between">
-      {/* Left Section - Empty for spacing */}
-      <div className="flex-1"></div>
+      {/* Left Section - Page Info */}
+      <div className="flex-1 flex items-center gap-3">
+        {Icon && <Icon className="h-6 w-6 text-primary" />}
+        {title && (
+          <div>
+            <h1 className="text-lg font-semibold">{title}</h1>
+            {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
+          </div>
+        )}
+      </div>
 
       {/* Right Section */}
       <div className="flex items-center gap-4">

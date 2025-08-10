@@ -57,8 +57,13 @@ interface TradingState {
   // Actions
   setCurrentSymbol: (symbol: string) => void;
   setCacheData: (type: 'chart' | 'options', key: string, data: any, additionalParams?: any) => void;
-  getCacheData: (type: 'chart' | 'options', key: string) => any;
-  isCacheValid: (type: 'chart' | 'options', key: string, maxAgeMs?: number) => boolean;
+  getCacheData: (type: 'chart' | 'options', key: string, additionalParams?: any) => any;
+  isCacheValid: (
+    type: 'chart' | 'options',
+    key: string,
+    maxAgeMs?: number,
+    additionalParams?: any
+  ) => boolean;
   setCoveredCallsFilters: (filters: Partial<FilterState>) => void;
   resetFilters: () => void;
   setLoading: (loading: boolean) => void;
@@ -101,14 +106,19 @@ export const useTradingStore = create<TradingState>()(
 
       setCacheData: (type, key, data, additionalParams = {}) => {
         const timestamp = Date.now();
-        const cacheKey = key.toUpperCase();
+        let cacheKey = key.toUpperCase();
+
+        // For chart data, include timeRange in cache key
+        if (type === 'chart' && additionalParams.timeRange) {
+          cacheKey = `${cacheKey}_${additionalParams.timeRange}`;
+        }
 
         if (type === 'chart') {
           set(state => ({
             chartDataCache: {
               ...state.chartDataCache,
               [cacheKey]: {
-                symbol: cacheKey,
+                symbol: key.toUpperCase(),
                 data,
                 timeRange: additionalParams.timeRange || '3M',
                 lastFetched: timestamp,
@@ -130,8 +140,14 @@ export const useTradingStore = create<TradingState>()(
         }
       },
 
-      getCacheData: (type, key) => {
-        const cacheKey = key.toUpperCase();
+      getCacheData: (type, key, additionalParams = {}) => {
+        let cacheKey = key.toUpperCase();
+
+        // For chart data, include timeRange in cache key
+        if (type === 'chart' && additionalParams.timeRange) {
+          cacheKey = `${cacheKey}_${additionalParams.timeRange}`;
+        }
+
         const state = get();
 
         if (type === 'chart') {
@@ -143,9 +159,9 @@ export const useTradingStore = create<TradingState>()(
         return null;
       },
 
-      isCacheValid: (type, key, maxAgeMs = 5 * 60 * 1000) => {
+      isCacheValid: (type, key, maxAgeMs = 5 * 60 * 1000, additionalParams = {}) => {
         // Default 5 minutes
-        const cachedData = get().getCacheData(type, key);
+        const cachedData = get().getCacheData(type, key, additionalParams);
         if (!cachedData) return false;
 
         const now = Date.now();
