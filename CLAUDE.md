@@ -1,287 +1,271 @@
-# Trading Bot - Software Specifications
+# Trading Bot - Software Specifications (Updated: January 10, 2025)
 
 ## Project Overview
 
-**AI Trading Analysis Platform** - A Next.js 15.4.4 application built with TypeScript and React 19 for advanced stock trading analysis, algorithmic pattern detection, and automated trading strategies.
+**Advanced Trading Analysis Platform** - A Next.js 15.4.4 application built with TypeScript and React 19 for professional stock trading analysis, algorithmic pattern detection, and options trading strategies.
 
 ### Architecture
 
 - **Frontend**: Next.js 15.4.4 with App Router, TypeScript, Tailwind CSS v4
-- **Authentication**: Supabase Auth with Email/Google OAuth
+- **Authentication**: Supabase Auth with Email/Google OAuth, client-side redirect handling
 - **Database**: Supabase PostgreSQL with Row Level Security
-- **Charts**: Recharts v3.1.0 for technical analysis, Lightweight Charts for advanced visualization
+- **Charts**: Recharts v3.1.0 for technical analysis and pattern visualization
 - **State Management**: Zustand v5.0.6 + React Query v5.83.0
-- **Deployment**: Vercel via git push integration
+- **Deployment**: Vercel via git push integration, production build optimized
 
-## Core Features
+## Current Application Structure
 
-### 1. Trading Algorithms
-
-#### Swing Trading Signals
-
-- **Algorithm**: Multi-indicator confluence detection
-- **Timeframe**: 2-3 day holding period
-- **Indicators**: RSI, MACD, Support/Resistance, Volume analysis
-- **Entry Criteria**: RSI oversold recovery + MACD momentum + support zone
-- **Risk Management**: ATR-based stop losses, 2:1 risk/reward targets
-
-#### Intraday Gap-Up Breakout Strategy
-
-- **Algorithm**: 6-step gap detection with momentum confirmation
-- **Criteria**:
-  - Gap ≥0.3% from previous close
-  - Volume ≥1.2x average
-  - RSI between 40-80
-  - Above 20-day SMA
-  - Strong momentum indicators
-- **Implementation**: Relaxed thresholds for daily data compatibility
-
-### 2. Chart Analysis Engine
-
-#### Pattern Detection (20+ Algorithms)
-
-- **Candlestick Patterns**: Bullish/Bearish Engulfing, Doji, Hammer, Shooting Star
-- **Support/Resistance**: Dynamic level detection with strength scoring
-- **Confluence Analysis**: Multiple pattern alignment with probability weighting
-- **Confidence Filtering**: Top 3 highest confidence patterns displayed
-
-#### Technical Indicators
-
-- **Trend**: SMA (20/50/200), EMA (12/26), VWAP
-- **Momentum**: RSI, MACD, Stochastic, Williams %R
-- **Volatility**: Bollinger Bands, ATR
-- **Volume**: Volume MA, On-Balance Volume
-
-### 3. Options Trading
-
-#### Black-Scholes Greeks Calculator
-
-- **Calculations**: Delta, Gamma, Theta, Vega, Rho
-- **Pricing**: Theoretical option value, intrinsic/time value
-- **Implementation**: Custom Black-Scholes without external dependencies
-
-#### Covered Calls Analysis
-
-- **Formulas**:
-  - MaxProfit = (min(K – S, 0) + P) × 100 – InterestCost
-  - AnnualizedReturn = (MaxProfit / (S × 100)) × (365 / T) × 100
-  - BreakEven = S – P
-- **Risk Metrics**: Cost of borrowing, max loss, probability of profit
-
-### 4. User Interface
-
-#### Main Application
-
-- **Primary Page**: /charts (main trading interface)
-- **Navigation**: Collapsible sidebar with /covered-calls, /watchlist
-- **Removed Pages**: dashboard, settings, screener, portfolio, alerts
-
-#### Chart Features
-
-- **Responsive Design**: Dynamic heights (450px mobile, 550px tablet, 650px desktop)
-- **Interaction**: Ctrl/Cmd+scroll zoom, pattern overlay visualization
-- **Entry/Exit Visualization**: TP/SL/Entry lines with price labels
-- **Floating Legend**: Real-time pattern information display
-
-#### UI/UX Improvements
-
-- **Scroll Behavior**: Chart zoom on Ctrl/Cmd, normal page scroll otherwise
-- **Decimal Formatting**: 1 decimal place for all stock prices
-- **Labeling**: "Algo" terminology instead of "AI"
-- **Pattern Filtering**: Maximum 3 patterns to reduce visual clutter
-
-## Application Structure
-
-### Pages
+### Pages & Navigation
 
 ```
-/charts          - Main trading analysis interface
-/covered-calls   - Options analysis and Greeks calculator
-/watchlist       - Stock watchlist management
+/ (root)         - Landing page with client-side auth redirect
+/options         - PRIMARY: Options analysis and covered calls (first in nav)
+/charts          - Technical analysis with pattern detection (second in nav)
+/watchlist       - Placeholder ("coming soon")
 /login          - Authentication (Email/Google)
 /register       - User registration
 ```
 
-### Key Components
+### Key UI Behaviors
 
-- **StockChart**: Main chart component with pattern overlays
-- **PatternEvidencePanel**: Algorithm explanations and evidence
-- **PatternDefinitions**: Trading pattern education
-- **SidebarNav**: Collapsible navigation with 3 main pages
-- **Header**: Market status, API rate counter, user menu
+- **Primary Page**: `/options` (first in navigation, main feature)
+- **Collapsible Sidebar**: 3-item navigation, expands/collapses with toggle
+- **Header**: Market status, API rate counter, user menu (right-aligned)
+- **Manual Data Loading**: All API calls require user action (Load/Analyze buttons)
+- **Responsive Design**: Dynamic heights (450px mobile, 550px tablet, 650px desktop)
 
-### Database Schema
+## Trading Algorithms (Currently Implemented)
 
-#### User Management
+### 1. Candlestick Pattern Detection (9 Core Patterns)
 
-```sql
-profiles (id, email, full_name, subscription_tier, created_at, updated_at)
+- **Bullish Engulfing (BE)**: 68.2% win rate, 1.5x risk/reward
+- **Bearish Engulfing (BR)**: 65.4% win rate, 1.5x risk/reward
+- **Hammer (H)**: 59.1% win rate, 2.0x risk/reward
+- **Shooting Star**: 57% win rate, 2.0x risk/reward
+- **Doji**: Neutral signal, 50% probability
+- **Morning Star**: 70.1% win rate (3-candle pattern)
+- **Evening Star**: 69.4% win rate (3-candle pattern)
+- **Inside Bar**: 71.6% win rate with volume confirmation
+- **Marubozu**: Strong continuation signal
+
+### 2. Advanced Combination Patterns (18+ Algorithms)
+
+- **Triple Confirmation Bounce**: 72% base probability, 2:1 risk/reward
+- **Bullish Engulfing at Support**: Enhanced confluence detection
+- **Golden Cross Pullback**: Moving average crossover strategy
+- **RSI Divergence at Support**: 72.5% win rate
+- **Resistance Breakout with Volume**: Volume-confirmed breakouts
+- **Cup & Handle Breakout**: 76.1% win rate
+- **EMA Pullback Entry**: Trend following strategy
+- **Opening Range Breakout (ORB)**: Intraday strategy
+- **VWAP Bounce/Reject**: Mean reversion strategy
+- **Liquidity Sweep Reversal**: Advanced market structure
+- **EOD Sharp Drop Bounce**: End-of-day reversal detector
+
+### 3. Support/Resistance Detection
+
+- **Dynamic Level Detection**: Strength scoring with 1-3 touch minimum
+- **Price Consolidation Analysis**: Identifies horizontal price levels
+- **Confluence Scoring**: Multiple timeframe validation
+- **Top 3 Filtering**: Only strongest levels displayed to reduce clutter
+
+## Options Trading Formulas (Production Implementation)
+
+### Black-Scholes Model Implementation
+
+```typescript
+// d1 calculation
+d1 = (ln(S/K) + (r - q + 0.5*σ²)*T) / (σ*√T)
+
+// d2 calculation
+d2 = d1 - σ*√T
+
+// Call option price
+C = S*e^(-q*T)*N(d1) - K*e^(-r*T)*N(d2)
+
+// Put option price
+P = K*e^(-r*T)*N(-d2) - S*e^(-q*T)*N(-d1)
 ```
 
-#### Trading Data
+### Greeks Calculations (Custom Implementation)
 
-```sql
-watchlist (id, user_id, symbol, notes, created_at)
-portfolio (id, user_id, symbol, quantity, average_cost, created_at, updated_at)
-alerts (id, user_id, symbol, condition, target_price, is_active, triggered_at, created_at)
+- **Delta (Call)**: `e^(-q*T) * N(d1)`
+- **Delta (Put)**: `e^(-q*T) * (N(d1) - 1)`
+- **Gamma**: `(e^(-q*T) * n(d1)) / (S * σ * √T)`
+- **Theta (Call)**: Complex time decay formula divided by 365 for daily
+- **Vega**: `(S * e^(-q*T) * n(d1) * √T) / 100`
+- **Rho (Call)**: `(K * T * e^(-r*T) * N(d2)) / 100`
+
+### Covered Calls Analysis Formulas
+
+```typescript
+// Interest Cost (LOC borrowing)
+InterestCost = (S × 100) × R_borrow × (T / 365)
+
+// Net Profit - In The Money (ITM)
+NetProfit = (K - S) * 100 + P * 100 - InterestCost
+
+// Net Profit - Out of The Money (OTM)
+NetProfit = P * 100 - InterestCost
+
+// Annualized Return
+AnnualizedReturn = (NetProfit / (S * 100)) × (365 / T) × 100
+
+// Breakeven Calculations
+BreakEven_OTM = S - P + (InterestCost / 100)
+BreakEven_ITM = S + (InterestCost / 100) - P
 ```
 
-#### Security
+## Page-Specific Functionality
 
-- Row Level Security (RLS) enabled on all tables
-- User-specific data access policies
-- Automatic profile creation on signup
+### Options Page (/options) - PRIMARY FEATURE
 
-## Data Sources & APIs
+**Layout & Controls:**
 
-### Stock Data
+- **Top Section**: Symbol search input, LOC rate input (%), algorithm selector dropdown
+- **Filter Panel**: Strike range sliders, expiration date filters, volume/OI minimums
+- **Main Table**: Paginated sortable options data with profit calculations
+- **Tabs**: "All Options" vs "Recommendations" view
 
-- **Primary**: Polygon.io API (real-time, historical data)
-- **Fallback**: Yahoo Finance API (backup/development)
-- **Rate Limiting**: Built-in request throttling and monitoring
+**Key Buttons & Position:**
 
-### API Configuration
+- **Analyze Button**: Primary action, triggers options chain fetch and calculations
+- **Export Button**: CSV export, positioned next to Analyze
+- **Algorithm Selector**: Dropdown with covered call strategies
+- **Clear Filters**: Reset all filter criteria
 
-```
-NEXT_PUBLIC_SUPABASE_URL=https://[project].supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=[anon-key]
-YAHOO_FINANCE_API_KEY=[optional]
-POLYGON_API_KEY=[required-for-production]
-```
+**Workflow:**
 
-### Data Management
+1. Enter symbol and LOC rate
+2. Apply filters (strike range, expiration, volume)
+3. Click Analyze to fetch options chain
+4. Calculate Black-Scholes pricing and Greeks
+5. Generate covered call recommendations
+6. Display sortable results with profit metrics
 
-- **Manual Triggers**: No automatic API calls, user-initiated only
-- **Caching**: React Query with manual refetch control
-- **Error Handling**: Graceful fallback between data sources
+### Charts Page (/charts) - TECHNICAL ANALYSIS
 
-## Development Setup
+**Layout & Controls:**
 
-### Prerequisites
+- **Top Controls Bar**: Symbol input, timerange dropdown (1D-MAX), Load/Export buttons
+- **Chart Area**: 75% width, Recharts ComposedChart with candlesticks and overlays
+- **Right Panel**: Collapsible, tabbed technical indicators (Trend/Momentum/Vol/Volume)
+- **Bottom Panels**: Pattern evidence explanations, pattern legend modal
 
-- Node.js 18+
-- Supabase account and project
-- Polygon.io API key (optional: Yahoo Finance)
+**Key Buttons & Position:**
 
-### Installation
+- **Load Button**: Top-right of controls, fetches chart data and runs pattern detection
+- **Export Button**: Next to Load, exports chart data to CSV
+- **Configure Patterns**: Opens drawer for pattern type selection
+- **Codes Button**: Shows pattern legend modal with abbreviations
+- **Panel Toggle**: Collapse/expand right indicator panel
 
-```bash
-npm install
-npm run dev --turbopack
-```
+**Chart Interactions:**
 
-### Development Commands
+- **Zoom**: Ctrl/Cmd+scroll for chart zoom, normal scroll for page
+- **Pattern Overlays**: Entry/exit/TP/SL lines with price labels
+- **Maximum 3 Patterns**: Filters top confidence patterns to reduce visual clutter
+- **Responsive Heights**: Dynamic sizing based on viewport
 
-- **Start**: `npm run dev` (with Turbopack)
-- **Build**: `npm run build`
-- **Lint**: `npm run lint` (auto-fix with `npm run lint:fix`)
-- **Type Check**: `npm run type-check`
-- **Format**: `npm run format` (Prettier)
+**Workflow:**
 
-### Git Hooks (Husky)
+1. Enter symbol and select timerange
+2. Click Load to fetch data
+3. Pattern detection algorithms run automatically
+4. Visual overlays generated for top 3 patterns
+5. Pattern evidence displayed in bottom panel
+6. Technical indicators calculated and displayed in right panel
 
-- **Pre-commit**: ESLint + Prettier auto-formatting
-- **Commit Linting**: Conventional commit message format
+## Technical Indicators (Implemented)
 
-## Technical Implementation
+### Trend Indicators
 
-### Chart Rendering
+- **SMA**: Simple moving averages (20, 50, 200 periods)
+- **EMA**: Exponential moving averages (12, 26 periods)
+- **VWAP**: Volume-weighted average price
 
-- **Library**: Recharts ComposedChart for main visualization
-- **Performance**: Pattern filtering to prevent overcrowding
-- **Responsiveness**: Dynamic sizing based on viewport
-- **Interaction**: Zoom controls, collapsible panels
+### Momentum Indicators
 
-### Pattern Detection Engine
+- **RSI**: Relative Strength Index (Wilder's smoothing, 14-period)
+- **MACD**: 12/26 EMA with 9-period signal line
+- **Stochastic**: %K and %D oscillators
+- **Williams %R**: Rate of change oscillator
 
-- **Service**: `PatternDetectionService` with 20+ algorithms
-- **Real-time Analysis**: Confidence scoring and probability calculation
-- **Visual Overlay**: Automatic entry/exit/TP/SL line generation
-- **Evidence Tracking**: Detailed algorithm explanations
+### Volatility Indicators
 
-### State Management
+- **Bollinger Bands**: 20-period SMA ± 2 standard deviations
+- **ATR**: Average True Range for volatility measurement
 
-- **Global State**: Zustand for UI state (sidebar collapse, chart settings)
-- **Server State**: React Query for API data management
-- **Authentication**: Supabase client-side session management
+### Volume Indicators
 
-## Deployment
+- **Volume MA**: Moving average of volume
+- **On-Balance Volume**: Cumulative volume indicator
 
-### Vercel Integration
+## Data Management & Caching
 
-- **Method**: Git push to GitHub → automatic Vercel deployment
-- **Environment**: Production environment variables configured
-- **Build**: Next.js optimized build with Turbopack
+### API Structure
 
-### Performance Optimizations
+- **Primary**: Polygon.io API with rate limiting and authentication
+- **Fallback**: Yahoo Finance API for development/backup
+- **Manual Triggers**: No automatic calls, all user-initiated
+- **Rate Limiting**: Built-in throttling with usage monitoring
 
-- **Code Splitting**: Dynamic imports for chart components
-- **Caching**: React Query with strategic cache invalidation
-- **Bundle Size**: Optimized dependencies and tree shaking
+### Caching System
 
-## Troubleshooting
+- **Chart Data**: 5-minute cache with React Query
+- **Options Data**: 10-minute cache for expensive calls
+- **Freshness Indicators**: Warns when data is stale
+- **Manual Refresh**: User can force refresh to bypass cache
 
-### Common Issues
+### Error Handling
 
-- **Turbopack Errors**: Clear `.next` directory and `node_modules/.cache`
-- **Pattern Not Showing**: Check algorithm thresholds and market hours
-- **API Rate Limits**: Monitor usage with built-in rate counter
-- **Authentication Redirects**: Verify callback URLs and middleware routes
+- **Graceful Fallback**: Automatic switching between data sources
+- **User Feedback**: Clear error messages without sensitive info
+- **Retry Logic**: Automatic retries with exponential backoff
 
-### Debug Tools
+## Pattern Detection Workflow
 
-- **React Query Devtools**: Enabled in development
-- **Console Logging**: Pattern detection debug output
-- **Error Boundaries**: Graceful error handling for chart components
+1. **Data Fetching**: Load OHLCV data from API
+2. **Indicator Calculation**: RSI, MACD, SMA, support/resistance levels
+3. **Pattern Scanning**: Run 27+ algorithms across all candles
+4. **Confidence Scoring**: Calculate probability and strength for each pattern
+5. **Filtering**: Select top 3 highest confidence patterns
+6. **Visualization**: Generate entry/exit/TP/SL overlays on chart
+7. **Evidence Display**: Show detailed algorithm explanations
 
-## Trading Algorithm Specifications
+## Pattern Confidence Levels
 
-### Pattern Confidence Scoring
+- **High (>75%)**: Multiple confirmations, strong volume, clear signals
+- **Medium (50-75%)**: Some confirmations, moderate signals
+- **Low (<50%)**: Weak signals, requires additional confirmation
+- **Risk Management**: ATR-based stop losses (1.5-2x ATR), 2:1 minimum risk/reward
 
-- **High Confidence**: >75% probability, multiple confirmations
-- **Medium Confidence**: 50-75% probability, some confirmations
-- **Low Confidence**: <50% probability, weak signals
+## Current Implementation Status
 
-### Risk Management
+### ✅ Fully Implemented
 
-- **Stop Loss**: ATR-based calculations (typically 1.5-2x ATR)
-- **Take Profit**: Risk/reward ratios of 2:1 or better
-- **Position Sizing**: Based on account risk tolerance
+- **Options Analysis**: Complete Black-Scholes calculator with Greeks
+- **Pattern Detection**: 27+ algorithms with visual overlays
+- **Technical Indicators**: Full suite of trend/momentum/volume indicators
+- **Chart Visualization**: Interactive Recharts with zoom and patterns
+- **Data Export**: CSV export for both charts and options
+- **Authentication**: Supabase auth with client-side redirects
+- **Responsive Design**: Mobile-first with collapsible panels
+- **Enterprise Security**: JWT validation, rate limiting, input sanitization
 
-### Algorithm Performance
+### 🔄 Partially Implemented
 
-- **Backtesting**: Historical win rates and probability calculations
-- **Real-time**: Live pattern detection with confidence intervals
-- **Validation**: Multi-timeframe confirmation requirements
+- **Covered Calls**: Complex formulas working, full UI functional
+- **Data Freshness**: Indicators and warnings for stale data
+- **Pattern Evidence**: Detailed explanations available in UI
 
-## Security & Compliance
+### ❌ Not Implemented
 
-### Data Security
-
-- **Row Level Security**: Database-level access control
-- **API Key Management**: Environment variable isolation
-- **Session Management**: Secure Supabase authentication
-
-### Trading Compliance
-
-- **Educational Purpose**: Platform designed for analysis, not execution
-- **Risk Disclosure**: Clear risk warnings and educational content
-- **Data Accuracy**: Multiple data source validation
-
-## Performance Metrics
-
-### Application Performance
-
-- **Load Time**: <2 seconds initial load
-- **Chart Rendering**: <500ms pattern detection
-- **API Response**: <1 second average response time
-- **Memory Usage**: Optimized React Query cache management
-
-### Trading Performance
-
-- **Pattern Accuracy**: Algorithm-specific win rates displayed
-- **Risk Metrics**: Real-time risk/reward calculations
-- **Execution**: Clear entry/exit signals with price targets
+- **Watchlist**: Only placeholder page
+- **Portfolio Tracking**: Database schema exists, no UI
+- **Alerts System**: Database schema exists, no functionality
+- **Backtesting Engine**: Win rates hardcoded, not calculated
+- **Paper Trading**: No execution capabilities (educational platform)
 
 ## Security Implementation (Updated: January 10, 2025)
 
